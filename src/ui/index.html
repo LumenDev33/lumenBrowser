@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ru" class="js" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: http:; script-src 'self'; connect-src 'self' https: http:;">
+  <title>Lumen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Lora:ital@0;1&family=Manrope:wght@300;400;500;600;700&family=Unbounded:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="16" cy="16" r="8.4"></circle>
+      <path d="M16 3.8v5.2M16 23v5.2M3.8 16H9M23 16h5.2"></path>
+      <circle cx="16" cy="16" r="2.3" fill="currentColor" stroke="none"></circle>
+    </symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m14.5 5-7 7 7 7"></path>
+    </symbol>
+    <symbol id="i-forward" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m9.5 5 7 7-7 7"></path>
+    </symbol>
+    <symbol id="i-reload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 8.5A7.5 7.5 0 1 0 20 12"></path>
+      <path d="M19.5 4.5V9H15"></path>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <path d="M7 7l10 10M17 7 7 17"></path>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <path d="M12 5v14M5 12h14"></path>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <path d="m7 7 10 10M17 7 7 17"></path>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <circle cx="10.8" cy="10.8" r="6.3"></circle>
+      <path d="m15.5 15.5 4 4"></path>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="10" width="14" height="10" rx="2.5"></rect>
+      <path d="M8.5 10V7.8a3.5 3.5 0 0 1 7 0V10"></path>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="12" cy="12" r="8"></circle>
+      <path d="M4.5 12h15M12 4c2.4 2.2 3.5 5 3.5 8s-1.1 5.8-3.5 8c-2.4-2.2-3.5-5-3.5-8S9.6 6.2 12 4Z"></path>
+    </symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+      <path d="m12 4 2.3 4.8 5.2.7-3.8 3.7.9 5.1-4.6-2.4-4.6 2.4.9-5.1-3.8-3.7 5.2-.7L12 4Z"></path>
+    </symbol>
+    <symbol id="i-command" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <path d="M9 6.5a2.5 2.5 0 1 0-2.5 2.5H9V6.5ZM15 6.5A2.5 2.5 0 1 1 17.5 9H15V6.5ZM9 17.5A2.5 2.5 0 1 0 6.5 15H9v2.5ZM15 17.5a2.5 2.5 0 1 1 2.5-2.5H15v2.5ZM9 9h6v6H9V9Z"></path>
+    </symbol>
+    <symbol id="i-minimize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <path d="M6 12h12"></path>
+    </symbol>
+    <symbol id="i-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5"></rect>
+    </symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.5 8.5h7a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-7a1.5 1.5 0 0 1-1.5-1.5v-7a1.5 1.5 0 0 1 1.5-1.5Z"></path>
+      <path d="M7 8.5V7A1.5 1.5 0 0 1 8.5 5.5H15A1.5 1.5 0 0 1 16.5 7v6"></path>
+    </symbol>
+    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"></path>
+      <path d="M4.5 5v4h4M12 8v4.2l2.8 1.8"></path>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v10"></path>
+      <path d="m7.8 10 4.2 4.2L16.2 10"></path>
+      <path d="M5 17.5v1.7h14v-1.7"></path>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M18 6l-1.4 1.4M7.4 16.6 6 18"></path>
+    </symbol>
+    <symbol id="i-more" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="1.35"></circle>
+      <circle cx="12" cy="12" r="1.35"></circle>
+      <circle cx="19" cy="12" r="1.35"></circle>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 7.5h14M10 7.5V5h4v2.5M8 7.5l.7 11h6.6l.7-11"></path>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l2 2h6.5A1.5 1.5 0 0 1 19.5 9.5v7A1.5 1.5 0 0 1 18 18H5.5A1.5 1.5 0 0 1 4 16.5v-9Z"></path>
+    </symbol>
+    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 5h5v5M19 5l-8 8"></path>
+      <path d="M18 13v5.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 5 18.5v-10A1.5 1.5 0 0 1 6.5 7H12"></path>
+    </symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6"></path>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m5 12.5 4.2 4.2L19 7"></path>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.8 19 7v5.2c0 4.1-2.9 6.8-7 8-4.1-1.2-7-3.9-7-8V7l7-3.2Z"></path>
+      <path d="m8.8 12 2.1 2.1 4.4-4.4"></path>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <path d="M12 3.5c.4 4.9 3.6 8.1 8.5 8.5-4.9.4-8.1 3.6-8.5 8.5-.4-4.9-3.6-8.1-8.5-8.5 4.9-.4 8.1-3.6 8.5-8.5Z"></path>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8.5" r="3.6"></circle>
+      <path d="M5.4 19.2c.8-3.2 3.3-5 6.6-5s5.8 1.8 6.6 5"></path>
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4.1"></circle>
+      <path d="M12 3v2.1M12 18.9V21M3 12h2.1M18.9 12H21M5.6 5.6l1.5 1.5M16.9 16.9l1.5 1.5M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5"></path>
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19.2 14.6A7.7 7.7 0 0 1 9.4 4.8 7.8 7.8 0 1 0 19.2 14.6Z"></path>
+    </symbol>
+    <symbol id="i-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.5" y="5" width="17" height="11.5" rx="2"></rect>
+      <path d="M9 20h6M12 16.5V20"></path>
+    </symbol>
+  </svg>
+
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <header class="sidebar-head drag-region">
+        <a class="brand" href="#" id="brand-home" aria-label="Lumen — новая вкладка">
+          <span class="brand-mark"><svg class="icon icon--logo"><use href="#i-logo"></use></svg></span>
+          <span class="brand-word">lumen</span>
+        </a>
+        <span class="brand-version">1.1</span>
+      </header>
+
+      <div class="sidebar-scroll">
+        <button class="new-tab-btn" id="new-tab" type="button">
+          <span class="new-tab-icon"><svg class="icon"><use href="#i-plus"></use></svg></span>
+          <span>Новая вкладка</span>
+          <kbd>Ctrl T</kbd>
+        </button>
+
+        <section class="side-section tabs-section" aria-label="Вкладки">
+          <div class="side-label">
+            <span>Вкладки</span>
+            <span class="side-count" id="tab-count">1</span>
+          </div>
+          <div class="tabs" id="tabs" role="tablist" aria-label="Открытые вкладки"></div>
+        </section>
+
+        <section class="side-section bookmarks-section" id="bookmarks-section" aria-label="Закладки">
+          <div class="side-label">
+            <span>Закладки</span>
+            <button class="tiny-btn" id="add-bookmark" type="button" aria-label="Добавить текущую страницу в закладки" title="Добавить в закладки">
+              <svg class="icon"><use href="#i-plus"></use></svg>
+            </button>
+          </div>
+          <div class="bookmarks" id="bookmarks"></div>
+        </section>
+      </div>
+
+      <footer class="sidebar-foot">
+        <button class="side-action" type="button" data-panel="history">
+          <svg class="icon"><use href="#i-history"></use></svg>
+          <span>История</span>
+          <kbd>Ctrl H</kbd>
+        </button>
+        <button class="side-action" type="button" data-panel="downloads">
+          <svg class="icon"><use href="#i-download"></use></svg>
+          <span>Загрузки</span>
+          <span class="side-dot" id="download-dot" hidden></span>
+        </button>
+        <button class="side-action" type="button" data-panel="settings">
+          <svg class="icon"><use href="#i-settings"></use></svg>
+          <span>Настройки</span>
+        </button>
+        <button class="profile" id="profile" type="button" data-panel="settings" title="Настройки профиля">
+          <span class="profile-avatar is-empty" id="profile-avatar">
+            <svg class="icon"><use href="#i-user"></use></svg>
+          </span>
+          <span class="profile-text"><b id="profile-name">Без имени</b><small id="profile-meta">добавьте имя</small></span>
+          <span class="online-dot" title="Локальный профиль"></span>
+        </button>
+      </footer>
+    </aside>
+
+    <main class="workspace">
+      <header class="toolbar drag-region">
+        <div class="nav-controls">
+          <button class="icon-btn" id="go-back" type="button" aria-label="Назад" title="Назад" disabled>
+            <svg class="icon"><use href="#i-back"></use></svg>
+          </button>
+          <button class="icon-btn" id="go-forward" type="button" aria-label="Вперёд" title="Вперёд" disabled>
+            <svg class="icon"><use href="#i-forward"></use></svg>
+          </button>
+          <button class="icon-btn" id="reload" type="button" aria-label="Обновить" title="Обновить">
+            <svg class="icon"><use href="#i-reload" id="reload-icon"></use></svg>
+          </button>
+        </div>
+
+        <form class="omnibox" id="omnibox" autocomplete="off">
+          <span class="omnibox-security" id="security-icon" title="Защищённое соединение">
+            <svg class="icon"><use href="#i-lock"></use></svg>
+          </span>
+          <input id="address" type="text" inputmode="url" spellcheck="false" autocomplete="off" placeholder="Поиск или адрес" aria-label="Адресная строка">
+          <span class="omnibox-hint" id="omnibox-hint">Ctrl L</span>
+          <button class="omnibox-action" id="copy-url" type="button" aria-label="Копировать адрес" title="Копировать адрес">
+            <svg class="icon"><use href="#i-external"></use></svg>
+          </button>
+        </form>
+
+        <div class="toolbar-actions">
+          <button class="icon-btn star-btn" id="bookmark-page" type="button" aria-label="Добавить в закладки" title="Добавить в закладки" aria-pressed="false">
+            <svg class="icon"><use href="#i-star"></use></svg>
+          </button>
+          <button class="palette-btn" id="open-palette" type="button" title="Командная строка">
+            <svg class="icon"><use href="#i-command"></use></svg>
+            <span>Ctrl K</span>
+          </button>
+        </div>
+
+        <div class="window-controls">
+          <button class="window-btn" id="win-min" type="button" aria-label="Свернуть" title="Свернуть">
+            <svg class="icon"><use href="#i-minimize"></use></svg>
+          </button>
+          <button class="window-btn" id="win-max" type="button" aria-label="Развернуть" title="Развернуть">
+            <svg class="icon"><use href="#i-maximize"></use></svg>
+          </button>
+          <button class="window-btn window-btn--close" id="win-close" type="button" aria-label="Закрыть" title="Закрыть">
+            <svg class="icon"><use href="#i-close"></use></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="progress" id="progress" aria-hidden="true"><span></span></div>
+
+      <section class="page-shell" id="page-shell">
+        <div class="page-glow" aria-hidden="true"></div>
+        <div class="native-page" id="page-view" aria-hidden="true"></div>
+
+        <section class="newtab" id="newtab" aria-label="Новая вкладка">
+          <div class="newtab-inner">
+            <div class="newtab-top">
+              <div class="newtab-brand"><svg class="icon icon--logo"><use href="#i-logo"></use></svg><span>lumen</span></div>
+              <span class="newtab-date" id="newtab-date"></span>
+            </div>
+
+            <div class="newtab-hero">
+              <span class="newtab-kicker">Тихое место для интернета</span>
+              <h1 id="newtab-greeting">Доброе утро.</h1>
+              <form class="start-search" id="start-search" autocomplete="off">
+                <svg class="icon"><use href="#i-search"></use></svg>
+                <input id="start-search-input" type="text" spellcheck="false" autocomplete="off" placeholder="Поиск или адрес" aria-label="Поиск в интернете">
+                <button type="submit" aria-label="Найти"><svg class="icon"><use href="#i-arrow"></use></svg></button>
+              </form>
+              <p class="newtab-sub">Начните с вопроса. Lumen найдёт остальное.</p>
+            </div>
+
+            <div class="newtab-columns">
+              <section class="quick-block" aria-labelledby="quick-title">
+                <div class="block-head">
+                  <h2 id="quick-title">Быстрый доступ</h2>
+                  <button class="block-link" type="button" data-panel="settings">настроить</button>
+                </div>
+                <div class="quick-grid" id="quick-grid"></div>
+              </section>
+
+              <section class="recent-block" aria-labelledby="recent-title">
+                <div class="block-head">
+                  <h2 id="recent-title">Недавнее</h2>
+                  <button class="block-link" type="button" data-panel="history">вся история</button>
+                </div>
+                <div class="recent-list" id="recent-list"></div>
+              </section>
+            </div>
+
+            <div class="newtab-foot">
+              <span class="newtab-quote">«Спокойный интернет начинается с тишины.»</span>
+              <span class="newtab-tip"><kbd>Ctrl K</kbd> команды</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="error-state" id="error-state" hidden aria-live="polite">
+          <div class="error-card">
+            <span class="error-icon"><svg class="icon"><use href="#i-globe"></use></svg></span>
+            <span class="eyebrow">соединение прервано</span>
+            <h1 id="error-title">Не удалось открыть страницу</h1>
+            <p id="error-text">Проверьте адрес или попробуйте ещё раз.</p>
+            <div class="error-actions">
+              <button class="btn btn--primary" id="error-retry" type="button">Попробовать снова</button>
+              <button class="btn btn--ghost" id="error-newtab" type="button">На новую вкладку</button>
+            </div>
+            <span class="error-url" id="error-url"></span>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="overlay" id="overlay" hidden>
+    <div class="overlay-backdrop" data-close-overlay></div>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <header class="drawer-head">
+        <div>
+          <span class="eyebrow" id="drawer-kicker">Lumen</span>
+          <h2 id="drawer-title">История</h2>
+        </div>
+        <div class="drawer-head-actions" id="drawer-actions"></div>
+        <button class="icon-btn" type="button" data-close-overlay aria-label="Закрыть">
+          <svg class="icon"><use href="#i-close"></use></svg>
+        </button>
+      </header>
+      <div class="drawer-body" id="drawer-body"></div>
+    </aside>
+  </div>
+
+  <div class="palette-overlay" id="palette-overlay" hidden>
+    <div class="palette-backdrop" data-close-palette></div>
+    <section class="palette" role="dialog" aria-modal="true" aria-label="Командная строка">
+      <div class="palette-search">
+        <svg class="icon"><use href="#i-command"></use></svg>
+        <input id="palette-input" type="text" spellcheck="false" autocomplete="off" placeholder="Куда идём?" aria-label="Команда или адрес">
+        <kbd>ESC</kbd>
+      </div>
+      <div class="palette-list" id="palette-list"></div>
+      <div class="palette-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> выбор</span>
+        <span><kbd>↵</kbd> открыть</span>
+        <span class="palette-foot-brand">lumen</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="settings-overlay" id="settings-overlay" hidden>
+    <div class="settings-backdrop" data-close-settings></div>
+    <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="settings-head">
+        <div>
+          <span class="eyebrow">предпочтения</span>
+          <h2 id="settings-title">Настройки</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close-settings aria-label="Закрыть">
+          <svg class="icon"><use href="#i-close"></use></svg>
+        </button>
+      </header>
+      <div class="settings-body" id="settings-body"></div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
