@@ -1,9 +1,9 @@
 {
   "name": "lumen-browser",
-  "version": "1.1.0",
-  "description": "Lumen — a calm, beautiful browser built on Chromium.",
+  "version": "1.2.0",
+  "description": "Lumen — a calm, customizable browser built on Chromium.",
   "main": "src/main.js",
-  "author": "Lumen",
+  "author": "LumenDev33",
   "license": "MIT",
   "private": true,
   "engines": {
@@ -11,9 +11,36 @@
   },
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "dist": "electron-builder --win portable",
+    "dist:dir": "electron-builder --win dir"
   },
   "devDependencies": {
-    "electron": "^45.0.0"
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.lumen.browser",
+    "productName": "Lumen",
+    "copyright": "Copyright © 2026 Lumen",
+    "asar": true,
+    "compression": "maximum",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/icon.png",
+      "package.json",
+      "README.md"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "Lumen-${version}-portable.${ext}"
+    }
   }
 }

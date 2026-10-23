@@ -17,6 +17,11 @@ const {
 const fs = require("fs");
 const path = require("path");
 
+// Optional isolated profile for previews, tests and portable copies.
+if (process.env.LUMEN_USER_DATA) {
+  app.setPath("userData", path.resolve(process.env.LUMEN_USER_DATA));
+}
+
 const NEWTAB = "lumen://newtab";
 
 const SEARCH_ENGINES = {
@@ -27,6 +32,21 @@ const SEARCH_ENGINES = {
 
 const ACCENTS = ["gold", "mint", "blue", "coral"];
 const THEMES = ["dark", "light", "system"];
+const DENSITIES = ["compact", "cozy", "airy"];
+const UI_FONTS = ["manrope", "unbounded", "lora", "mono"];
+const PATTERNS = ["aurora", "mesh", "grid", "dots", "solid"];
+
+const DEFAULT_APPEARANCE = {
+  accentColor: "",
+  bgColor: "",
+  surfaceColor: "",
+  textColor: "",
+  radius: 18,
+  density: "cozy",
+  font: "manrope",
+  pattern: "aurora",
+  glow: true
+};
 
 const DEFAULT_SETTINGS = {
   name: "",
@@ -34,7 +54,8 @@ const DEFAULT_SETTINGS = {
   theme: "dark",
   accent: "gold",
   showBookmarks: true,
-  animations: true
+  animations: true,
+  appearance: { ...DEFAULT_APPEARANCE }
 };
 
 const DEFAULT_BOOKMARKS = [
@@ -136,6 +157,30 @@ function normalizeTheme(value) {
   return THEMES.includes(value) ? value : "dark";
 }
 
+function normalizeHexColor(value) {
+  if (typeof value !== "string") return "";
+  let hex = value.trim().toLowerCase();
+  if (!/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(hex)) return "";
+  if (hex.length === 4) {
+    hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  return hex;
+}
+
+function normalizeAppearance(input) {
+  const appearance = { ...DEFAULT_APPEARANCE, ...(input || {}) };
+  appearance.accentColor = normalizeHexColor(appearance.accentColor);
+  appearance.bgColor = normalizeHexColor(appearance.bgColor);
+  appearance.surfaceColor = normalizeHexColor(appearance.surfaceColor);
+  appearance.textColor = normalizeHexColor(appearance.textColor);
+  appearance.radius = Math.max(0, Math.min(30, Math.round(Number(appearance.radius) || 18)));
+  appearance.density = DENSITIES.includes(appearance.density) ? appearance.density : "cozy";
+  appearance.font = UI_FONTS.includes(appearance.font) ? appearance.font : "manrope";
+  appearance.pattern = PATTERNS.includes(appearance.pattern) ? appearance.pattern : "aurora";
+  appearance.glow = appearance.glow !== false;
+  return appearance;
+}
+
 function normalizeSettings(input) {
   const settings = { ...DEFAULT_SETTINGS, ...(input || {}) };
 
@@ -152,6 +197,7 @@ function normalizeSettings(input) {
   settings.accent = ACCENTS.includes(settings.accent) ? settings.accent : "gold";
   settings.showBookmarks = settings.showBookmarks !== false;
   settings.animations = settings.animations !== false;
+  settings.appearance = normalizeAppearance(settings.appearance);
 
   return settings;
 }
@@ -183,10 +229,16 @@ function resolvedTheme() {
 }
 
 function windowBackgroundColor() {
+  const custom = normalizeHexColor(store.settings.appearance?.bgColor);
+  if (custom) return custom;
   return resolvedTheme() === "light" ? "#f2eee5" : "#08080a";
 }
 
 function pageBackgroundColor() {
+  const custom = normalizeHexColor(store.settings.appearance?.surfaceColor);
+  if (custom) return custom;
+  const background = normalizeHexColor(store.settings.appearance?.bgColor);
+  if (background) return background;
   return resolvedTheme() === "light" ? "#f2eee5" : "#0b0b0d";
 }
 
@@ -1214,6 +1266,13 @@ function setupIpc() {
 
     if (typeof patch.animations === "boolean") {
       store.settings.animations = patch.animations;
+    }
+
+    if (patch.appearance && typeof patch.appearance === "object") {
+      store.settings.appearance = normalizeAppearance({
+        ...store.settings.appearance,
+        ...patch.appearance
+      });
     }
 
     applyNativeTheme();

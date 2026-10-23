@@ -26,6 +26,69 @@ const ACCENTS = {
 
 const TINT_PALETTE = ["#f3d37a", "#9ec5ff", "#ff9e80", "#a8e6cf", "#d7c4ff", "#ffb2c8"];
 
+const DEFAULT_APPEARANCE = {
+  accentColor: "",
+  bgColor: "",
+  surfaceColor: "",
+  textColor: "",
+  radius: 18,
+  density: "cozy",
+  font: "manrope",
+  pattern: "aurora",
+  glow: true
+};
+
+const DENSITIES = {
+  compact: { name: "Плотно", gap: "6px", pad: "9px", row: "9px" },
+  cozy: { name: "Спокойно", gap: "7px", pad: "11px", row: "12px" },
+  airy: { name: "Просторно", gap: "11px", pad: "14px", row: "15px" }
+};
+
+const UI_FONTS = {
+  manrope: {
+    name: "Manrope",
+    stack: '"Manrope", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif'
+  },
+  unbounded: {
+    name: "Unbounded",
+    stack: '"Unbounded", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif'
+  },
+  lora: {
+    name: "Lora",
+    stack: '"Lora", Georgia, "Times New Roman", serif'
+  },
+  mono: {
+    name: "JetBrains Mono",
+    stack: '"JetBrains Mono", "Cascadia Code", Consolas, monospace'
+  }
+};
+
+const PATTERNS = {
+  aurora: { name: "Аврора", note: "мягкие цветные пятна" },
+  mesh: { name: "Меш", note: "градиентная дымка" },
+  grid: { name: "Сетка", note: "тонкие линии" },
+  dots: { name: "Точки", note: "тихая фактура" },
+  solid: { name: "Чистый", note: "только цвет" }
+};
+
+const LIGHT_ACCENTS = {
+  gold: "#8f690d",
+  mint: "#22795f",
+  blue: "#315fae",
+  coral: "#b04a33"
+};
+
+const CUSTOM_VARS = [
+  "--accent", "--accent-rgb", "--accent-strong", "--accent-ink",
+  "--bg", "--bg-deep", "--bg-soft", "--surface-page", "--surface-sidebar",
+  "--surface-drawer", "--surface-modal", "--panel", "--surface-palette-rgb",
+  "--surface-input-rgb", "--surface-toast-rgb", "--surface-newtab-a",
+  "--surface-newtab-b", "--surface-newtab-c", "--text", "--text-soft", "--muted",
+  "--faint", "--line", "--line-strong", "--wash-rgb", "--backdrop",
+  "--radius", "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl",
+  "--density-gap", "--density-pad", "--density-row", "--font-ui", "--font-display"
+];
+
 const api = window.lumen || createMockApi();
 
 let state = null;
@@ -37,11 +100,13 @@ const ui = {
   paletteIndex: 0,
   paletteItems: [],
   settingsOpen: false,
+  designerOpen: false,
   historyQuery: "",
   newtabSignature: "",
   addressTabId: null,
   toastTimer: null,
-  boundsFrame: null
+  boundsFrame: null,
+  appearanceTimer: null
 };
 
 const el = {};
@@ -62,6 +127,104 @@ function escapeHTML(value) {
 
 function safeColor(value, fallback = "#f3d37a") {
   return typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value) ? value : fallback;
+}
+
+function normalizeHex(value) {
+  if (typeof value !== "string") return "";
+  let hex = value.trim().toLowerCase();
+  if (!/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(hex)) return "";
+  if (hex.length === 4) {
+    hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  return hex;
+}
+
+function hexToRgb(hex) {
+  const value = normalizeHex(hex) || "#000000";
+  return {
+    r: parseInt(value.slice(1, 3), 16),
+    g: parseInt(value.slice(3, 5), 16),
+    b: parseInt(value.slice(5, 7), 16)
+  };
+}
+
+function rgbToHex(r, g, b) {
+  const channel = (value) =>
+    Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0");
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
+}
+
+function mixHex(from, to, amount) {
+  const start = hexToRgb(from);
+  const end = hexToRgb(to);
+  const weight = Math.max(0, Math.min(1, amount));
+  return rgbToHex(
+    start.r + (end.r - start.r) * weight,
+    start.g + (end.g - start.g) * weight,
+    start.b + (end.b - start.b) * weight
+  );
+}
+
+function shadeHex(hex, amount) {
+  return amount >= 0 ? mixHex(hex, "#ffffff", amount) : mixHex(hex, "#000000", -amount);
+}
+
+function colorLuminance(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const transform = (channel) => {
+    const value = channel / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * transform(r) + 0.7152 * transform(g) + 0.0722 * transform(b);
+}
+
+function inkOn(hex) {
+  return colorLuminance(hex) > 0.52 ? "#17130c" : "#fffdf7";
+}
+
+function rgbText(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  return `${r}, ${g}, ${b}`;
+}
+
+function currentAppearance() {
+  const source = state && state.settings ? state.settings.appearance : null;
+  const appearance = { ...DEFAULT_APPEARANCE, ...(source || {}) };
+  appearance.accentColor = normalizeHex(appearance.accentColor);
+  appearance.bgColor = normalizeHex(appearance.bgColor);
+  appearance.surfaceColor = normalizeHex(appearance.surfaceColor);
+  appearance.textColor = normalizeHex(appearance.textColor);
+  appearance.radius = Math.max(0, Math.min(30, Math.round(Number(appearance.radius) || 18)));
+  appearance.density = Object.prototype.hasOwnProperty.call(DENSITIES, appearance.density)
+    ? appearance.density
+    : "cozy";
+  appearance.font = Object.prototype.hasOwnProperty.call(UI_FONTS, appearance.font)
+    ? appearance.font
+    : "manrope";
+  appearance.pattern = Object.prototype.hasOwnProperty.call(PATTERNS, appearance.pattern)
+    ? appearance.pattern
+    : "aurora";
+  appearance.glow = appearance.glow !== false;
+  return appearance;
+}
+
+function currentAccentKey() {
+  const value = state && state.settings ? state.settings.accent : "gold";
+  return Object.prototype.hasOwnProperty.call(ACCENTS, value) ? value : "gold";
+}
+
+function defaultAccentColor() {
+  const key = currentAccentKey();
+  if (resolvedTheme() === "light") return LIGHT_ACCENTS[key] || LIGHT_ACCENTS.gold;
+  return ACCENTS[key].color;
+}
+
+function defaultPaletteColor(key) {
+  const light = resolvedTheme() === "light";
+  if (key === "accentColor") return defaultAccentColor();
+  if (key === "bgColor") return light ? "#f3eee3" : "#08080a";
+  if (key === "surfaceColor") return light ? "#fffcf6" : "#0e0e11";
+  return light ? "#211d16" : "#f2efe7";
 }
 
 function hostOf(url) {
@@ -336,7 +499,15 @@ function createMockApi() {
       { id: "h4", title: "MDN Web Docs", url: "https://developer.mozilla.org", visitedAt: now - 1000 * 60 * 60 * 28, favicon: null }
     ],
     downloads: [],
-    settings: { name: "", searchEngine: "duckduckgo", theme: "dark", accent: "gold", showBookmarks: true, animations: true },
+    settings: {
+      name: "",
+      searchEngine: "duckduckgo",
+      theme: "dark",
+      accent: "gold",
+      showBookmarks: true,
+      animations: true,
+      appearance: { ...DEFAULT_APPEARANCE }
+    },
     maximized: false,
     canReopen: false
   };
@@ -495,9 +666,9 @@ function cacheDom() {
     "error-state", "error-title", "error-text", "error-url", "error-retry", "error-newtab",
     "overlay", "drawer-title", "drawer-kicker", "drawer-actions", "drawer-body",
     "palette-overlay", "palette-input", "palette-list",
-    "settings-overlay", "settings-body", "toast", "download-dot",
-    "brand-home", "copy-url", "progress", "profile-avatar", "profile-name",
-    "profile-meta"
+    "settings-overlay", "settings-body", "designer-overlay", "designer-body",
+    "toast", "download-dot", "brand-home", "copy-url", "progress",
+    "profile-avatar", "profile-name", "profile-meta"
   ];
 
   ids.forEach((id) => {
@@ -571,7 +742,7 @@ function handleState(nextState) {
 
   if (activeChanged) {
     ui.newtabSignature = "";
-    if (ui.panel || ui.paletteOpen || ui.settingsOpen) closeAllOverlays();
+    if (ui.panel || ui.paletteOpen || ui.settingsOpen || ui.designerOpen) closeAllOverlays();
   }
 
   applySettings();
@@ -607,7 +778,7 @@ function applySettings() {
   if (!state) return;
 
   const settings = state.settings || {};
-  const accent = Object.prototype.hasOwnProperty.call(ACCENTS, settings.accent) ? settings.accent : "gold";
+  const accent = currentAccentKey();
   document.documentElement.dataset.accent = accent;
   document.documentElement.dataset.motion = settings.animations === false ? "off" : "on";
   document.documentElement.dataset.theme = resolvedTheme();
@@ -619,7 +790,103 @@ function applySettings() {
     el.bookmarksSection.hidden = settings.showBookmarks === false;
   }
 
+  applyAppearance(currentAppearance());
   renderProfile();
+}
+
+function applyAppearance(appearance) {
+  const root = document.documentElement;
+  CUSTOM_VARS.forEach((name) => root.style.removeProperty(name));
+
+  const light = resolvedTheme() === "light";
+  const hasCustomPalette = Boolean(
+    appearance.accentColor || appearance.bgColor || appearance.surfaceColor || appearance.textColor
+  );
+  const themeBg = light ? "#f3eee3" : "#08080a";
+  const themeSurface = light ? "#fffcf6" : "#0e0e11";
+  const themeText = light ? "#211d16" : "#f2efe7";
+
+  const bg = appearance.bgColor || themeBg;
+  const surface = appearance.surfaceColor || themeSurface;
+  const inkBase = appearance.surfaceColor ? surface : bg;
+  const text = appearance.textColor || (hasCustomPalette ? inkOn(inkBase) : themeText);
+
+  if (hasCustomPalette) {
+    const textSoft = mixHex(text, bg, light ? 0.24 : 0.28);
+    const muted = mixHex(text, bg, light ? 0.42 : 0.46);
+    const faint = mixHex(text, bg, light ? 0.58 : 0.62);
+    const textRgb = rgbText(text);
+    const surfaceRgb = rgbText(surface);
+    const deep = shadeHex(bg, light ? -0.05 : -0.25);
+    const soft = shadeHex(bg, light ? 0.22 : 0.035);
+    const newtabB = shadeHex(bg, light ? 0.08 : 0.015);
+    const newtabC = shadeHex(bg, light ? 0.14 : 0.025);
+    const darkSurface = colorLuminance(surface) < 0.5;
+
+    root.style.setProperty("--bg", bg);
+    root.style.setProperty("--bg-deep", deep);
+    root.style.setProperty("--bg-soft", soft);
+    root.style.setProperty("--surface-page", bg);
+    root.style.setProperty("--surface-sidebar", surface);
+    root.style.setProperty("--surface-drawer", surface);
+    root.style.setProperty("--surface-modal", surface);
+    root.style.setProperty("--panel", surface);
+    root.style.setProperty("--surface-palette-rgb", surfaceRgb);
+    root.style.setProperty("--surface-input-rgb", surfaceRgb);
+    root.style.setProperty("--surface-toast-rgb", surfaceRgb);
+    root.style.setProperty("--surface-newtab-a", shadeHex(bg, light ? 0.1 : 0.025));
+    root.style.setProperty("--surface-newtab-b", newtabB);
+    root.style.setProperty("--surface-newtab-c", newtabC);
+    root.style.setProperty("--text", text);
+    root.style.setProperty("--text-soft", textSoft);
+    root.style.setProperty("--muted", muted);
+    root.style.setProperty("--faint", faint);
+    root.style.setProperty("--wash-rgb", textRgb);
+    root.style.setProperty("--line", `rgba(${textRgb}, 0.1)`);
+    root.style.setProperty("--line-strong", `rgba(${textRgb}, 0.17)`);
+    root.style.setProperty(
+      "--backdrop",
+      darkSurface ? "rgba(3, 3, 5, 0.64)" : "rgba(44, 32, 16, 0.3)"
+    );
+  }
+
+  if (appearance.accentColor || hasCustomPalette) {
+    const base = appearance.accentColor || ACCENTS[currentAccentKey()].color;
+    const surfaceLight = colorLuminance(inkBase) > 0.5;
+    const accent = surfaceLight && colorLuminance(base) > 0.5
+      ? mixHex(base, "#1b1408", 0.4)
+      : base;
+    const strong = surfaceLight
+      ? mixHex(accent, "#000000", 0.14)
+      : mixHex(accent, "#ffffff", 0.3);
+
+    root.style.setProperty("--accent", accent);
+    root.style.setProperty("--accent-rgb", rgbText(accent));
+    root.style.setProperty("--accent-strong", strong);
+    root.style.setProperty("--accent-ink", inkOn(accent));
+  }
+
+  const radius = appearance.radius;
+  root.style.setProperty("--radius", `${radius}px`);
+  root.style.setProperty("--radius-sm", `${Math.round(radius * 0.56)}px`);
+  root.style.setProperty("--radius-md", `${Math.round(radius * 0.72)}px`);
+  root.style.setProperty("--radius-lg", `${radius + 3}px`);
+  root.style.setProperty("--radius-xl", `${radius + 4}px`);
+
+  const density = DENSITIES[appearance.density] || DENSITIES.cozy;
+  root.style.setProperty("--density-gap", density.gap);
+  root.style.setProperty("--density-pad", density.pad);
+  root.style.setProperty("--density-row", density.row);
+
+  if (appearance.font && appearance.font !== "manrope") {
+    const stack = (UI_FONTS[appearance.font] || UI_FONTS.manrope).stack;
+    root.style.setProperty("--font-ui", stack);
+    root.style.setProperty("--font-display", stack);
+  }
+
+  root.dataset.pattern = appearance.pattern;
+  root.dataset.density = appearance.density;
+  root.dataset.glow = appearance.glow ? "on" : "off";
 }
 
 function scheduleBounds() {
@@ -682,6 +949,7 @@ function renderAll() {
 
   if (ui.panel) renderDrawer();
   if (ui.settingsOpen) renderSettings();
+  if (ui.designerOpen) syncDesigner();
   if (ui.paletteOpen) renderPalette();
 }
 
@@ -1065,6 +1333,23 @@ function renderSettings() {
     </div>
 
     <div class="setting-group">
+      <div class="setting-group-title">Интерфейс</div>
+      <div class="setting-row setting-row--designer">
+        <div class="setting-copy">
+          <h3>Редактор интерфейса</h3>
+          <p>Свои цвета, форма, шрифт и атмосфера. Всё меняется сразу.</p>
+        </div>
+        <div class="setting-control">
+          <button class="designer-open-btn" type="button" data-open-designer>
+            ${icon("spark")}
+            <span>Открыть редактор</span>
+            ${icon("arrow")}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-group">
       <div class="setting-group-title">Оформление</div>
       <div class="setting-row setting-row--theme">
         <div class="setting-copy">
@@ -1106,9 +1391,406 @@ function renderSettings() {
 
     <div class="settings-foot">
       <span>Настройки сохраняются локально на этом устройстве.</span>
-      <b>LUMEN 1.1</b>
+      <b>LUMEN 1.2</b>
     </div>
   `;
+}
+
+/* =========================================================
+   Interface designer
+   ========================================================= */
+
+function designerColorField(key, label, note) {
+  const appearance = currentAppearance();
+  const selected = appearance[key];
+  const value = selected || defaultPaletteColor(key);
+  const isCustom = Boolean(selected);
+
+  return `
+    <div class="designer-field designer-field--color">
+      <div class="designer-label">
+        <span>${label}<small>${note}</small></span>
+        <button class="designer-clear${isCustom ? "" : " is-hidden"}" type="button" data-clear-color="${key}" title="Вернуть автоматический цвет">авто</button>
+      </div>
+      <div class="designer-color-line">
+        <label class="designer-color-chip" style="--picked:${value}">
+          <input type="color" data-color-key="${key}" value="${value}" aria-label="${label}">
+          <span aria-hidden="true"></span>
+        </label>
+        <input class="designer-hex" type="text" data-color-text="${key}" value="${isCustom ? selected.toUpperCase() : ""}" placeholder="${value.toUpperCase()}" spellcheck="false" maxlength="7" aria-label="${label}, HEX">
+        <span class="designer-color-state" data-color-state="${key}">${isCustom ? "свой" : "авто"}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderDesigner() {
+  if (!el.designerBody || !state) return;
+
+  const appearance = currentAppearance();
+  const settings = state.settings || {};
+  const theme = currentTheme();
+  const accentKey = currentAccentKey();
+  const customAccent = appearance.accentColor;
+  const accentValue = customAccent || defaultAccentColor();
+
+  const themeButtons = Object.entries(THEMES)
+    .map(
+      ([value, item]) => `
+        <button class="designer-theme-option${theme === value ? " is-active" : ""}" type="button" data-designer-theme="${value}" role="radio" aria-checked="${theme === value}" title="${escapeHTML(item.name)}">
+          ${icon(item.icon)}
+          <span>${escapeHTML(item.name)}</span>
+        </button>
+      `
+    )
+    .join("");
+
+  const accentSwatches = Object.entries(ACCENTS)
+    .map(
+      ([value, item]) => `
+        <button class="designer-swatch${!customAccent && accentKey === value ? " is-active" : ""}" type="button" data-designer-accent="${value}" style="--swatch:${item.color}" title="${escapeHTML(item.name)}" aria-label="${escapeHTML(item.name)}" aria-pressed="${!customAccent && accentKey === value}"></button>
+      `
+    )
+    .join("");
+
+  const densityButtons = Object.entries(DENSITIES)
+    .map(
+      ([value, item]) => `
+        <button class="designer-density${appearance.density === value ? " is-active" : ""}" type="button" data-density-value="${value}" aria-pressed="${appearance.density === value}">
+          <span>${escapeHTML(item.name)}</span>
+          <small>${value === "compact" ? "меньше воздуха" : value === "airy" ? "больше пространства" : "баланс"}</small>
+        </button>
+      `
+    )
+    .join("");
+
+  const patternButtons = Object.entries(PATTERNS)
+    .map(
+      ([value, item]) => `
+        <button class="designer-pattern${appearance.pattern === value ? " is-active" : ""}" type="button" data-pattern-value="${value}" aria-pressed="${appearance.pattern === value}">
+          <span class="designer-pattern-art" data-pattern-art="${value}" aria-hidden="true"></span>
+          <span class="designer-pattern-copy"><b>${escapeHTML(item.name)}</b><small>${escapeHTML(item.note)}</small></span>
+        </button>
+      `
+    )
+    .join("");
+
+  const fontOptions = Object.entries(UI_FONTS)
+    .map(
+      ([value, item]) =>
+        `<option value="${value}"${appearance.font === value ? " selected" : ""}>${escapeHTML(item.name)}</option>`
+    )
+    .join("");
+
+  const toggle = (key, label, note, enabled, type = "settings") => `
+    <div class="designer-toggle-row">
+      <div><b>${label}</b><small>${note}</small></div>
+      <button class="toggle${enabled ? " is-on" : ""}" type="button" data-designer-toggle="${key}" data-toggle-type="${type}" role="switch" aria-checked="${enabled}" aria-label="${label}"></button>
+    </div>
+  `;
+
+  el.designerBody.innerHTML = `
+    <div class="designer-layout">
+      <div class="designer-controls">
+        <section class="designer-section">
+          <header class="designer-section-head">
+            <span class="designer-index">01</span>
+            <div><h3>Палитра</h3><p>Тема, акцент и цвета поверхностей.</p></div>
+          </header>
+
+          <div class="designer-field">
+            <div class="designer-label"><span>Тема<small>основа интерфейса</small></span></div>
+            <div class="designer-theme" role="radiogroup" aria-label="Тема">${themeButtons}</div>
+          </div>
+
+          <div class="designer-field">
+            <div class="designer-label">
+              <span>Акцент<small>ваш главный оттенок</small></span>
+              <button class="designer-clear${customAccent ? "" : " is-hidden"}" type="button" data-clear-color="accentColor" title="Вернуть акцент из темы">авто</button>
+            </div>
+            <div class="designer-swatches">
+              ${accentSwatches}
+              <label class="designer-swatch designer-swatch--custom${customAccent ? " is-active" : ""}" style="--swatch:${accentValue}" title="Свой акцент">
+                <input type="color" data-color-key="accentColor" value="${accentValue}" aria-label="Свой акцент">
+                <span aria-hidden="true">${customAccent ? "" : icon("plus")}</span>
+              </label>
+            </div>
+            <div class="designer-color-line designer-color-line--accent">
+              <input class="designer-hex" type="text" data-color-text="accentColor" value="${customAccent ? customAccent.toUpperCase() : ""}" placeholder="${defaultAccentColor().toUpperCase()}" spellcheck="false" maxlength="7" aria-label="Свой акцент, HEX">
+              <span class="designer-color-state" data-color-state="accentColor">${customAccent ? "свой" : "из темы"}</span>
+            </div>
+          </div>
+
+          ${designerColorField("bgColor", "Фон", "главное полотно")}
+          ${designerColorField("surfaceColor", "Поверхности", "панели и окна")}
+          ${designerColorField("textColor", "Текст", "контраст и настроение")}
+        </section>
+
+        <section class="designer-section">
+          <header class="designer-section-head">
+            <span class="designer-index">02</span>
+            <div><h3>Форма</h3><p>Радиусы, плотность и характер шрифта.</p></div>
+          </header>
+
+          <div class="designer-field">
+            <div class="designer-label">
+              <span>Скругление<small>от строгих углов до мягких форм</small></span>
+              <output class="designer-output" data-radius-value>${appearance.radius}px</output>
+            </div>
+            <input class="designer-range" id="designer-radius" type="range" min="0" max="30" step="1" value="${appearance.radius}" aria-label="Скругление">
+          </div>
+
+          <div class="designer-field">
+            <div class="designer-label"><span>Плотность<small>сколько воздуха оставить</small></span></div>
+            <div class="designer-density-grid">${densityButtons}</div>
+          </div>
+
+          <div class="designer-field">
+            <div class="designer-label"><span>Шрифт<small>голос интерфейса</small></span></div>
+            <span class="select-wrap designer-select">
+              <select id="designer-font" aria-label="Шрифт интерфейса">${fontOptions}</select>
+            </span>
+          </div>
+        </section>
+
+        <section class="designer-section">
+          <header class="designer-section-head">
+            <span class="designer-index">03</span>
+            <div><h3>Атмосфера</h3><p>Фактура фона и мелкие привычки Lumen.</p></div>
+          </header>
+
+          <div class="designer-field">
+            <div class="designer-label"><span>Фон новой вкладки<small>настроение стартовой страницы</small></span></div>
+            <div class="designer-pattern-grid">${patternButtons}</div>
+          </div>
+
+          <div class="designer-toggles">
+            ${toggle("glow", "Свечение", "мягкие цветные ореолы", appearance.glow !== false, "appearance")}
+            ${toggle("showBookmarks", "Закладки в панели", "быстрый доступ слева", settings.showBookmarks !== false)}
+            ${toggle("animations", "Анимации", "плавные переходы", settings.animations !== false)}
+          </div>
+        </section>
+      </div>
+
+      <aside class="designer-preview">
+        <div class="designer-preview-head">
+          <span class="eyebrow">живой предпросмотр</span>
+          <span class="designer-preview-badge" data-preview-label="theme">${escapeHTML(THEMES[theme].name)}</span>
+        </div>
+
+        <div class="designer-mock">
+          <div class="designer-mock-side">
+            <div class="designer-mock-brand">${icon("logo")}<span>lumen</span></div>
+            <div class="designer-mock-new">${icon("plus")}<span>Новая вкладка</span></div>
+            <div class="designer-mock-label">Вкладки</div>
+            <div class="designer-mock-tab is-active"><span class="designer-mock-favicon">L</span><span>Новая вкладка</span><b>×</b></div>
+            <div class="designer-mock-tab"><span class="designer-mock-favicon designer-mock-favicon--blue">G</span><span>GitHub</span></div>
+            <div class="designer-mock-label">Закладки</div>
+            <div class="designer-mock-bookmark"><span>M</span><span>MDN</span></div>
+            <div class="designer-mock-bookmark"><span>W</span><span>Wikipedia</span></div>
+            <div class="designer-mock-side-foot"><span>История</span><span>Настройки</span></div>
+          </div>
+          <div class="designer-mock-main">
+            <div class="designer-mock-toolbar">
+              <span class="designer-mock-dot"></span><span class="designer-mock-dot"></span><span class="designer-mock-dot"></span>
+              <span class="designer-mock-address">Поиск или адрес</span>
+              <span class="designer-mock-star">${icon("star")}</span>
+            </div>
+            <div class="designer-mock-page">
+              <span class="designer-mock-kicker">тихое место для интернета</span>
+              <h4>Добрый вечер.</h4>
+              <div class="designer-mock-search">${icon("search")}<span>Поиск или адрес</span><b>${icon("arrow")}</b></div>
+              <div class="designer-mock-cards">
+                <div class="designer-mock-card"><span class="designer-mock-card-icon">G</span><b>GitHub</b><small>github.com</small></div>
+                <div class="designer-mock-card"><span class="designer-mock-card-icon designer-mock-card-icon--blue">M</span><b>MDN</b><small>developer.mozilla.org</small></div>
+                <div class="designer-mock-card"><span class="designer-mock-card-icon designer-mock-card-icon--coral">Y</span><b>YouTube</b><small>youtube.com</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="designer-preview-meta">
+          <span data-preview-label="font">${escapeHTML(UI_FONTS[appearance.font].name)}</span>
+          <span>·</span>
+          <span data-preview-label="density">${escapeHTML(DENSITIES[appearance.density].name)}</span>
+          <span>·</span>
+          <span data-preview-label="pattern">${escapeHTML(PATTERNS[appearance.pattern].name)}</span>
+        </div>
+        <p class="designer-preview-note">${icon("spark")} Меняйте что угодно — предпросмотр и сам браузер обновляются одновременно.</p>
+      </aside>
+    </div>
+
+    <footer class="designer-foot">
+      <span>${icon("check")} Сохраняется автоматически на этом устройстве</span>
+      <div class="designer-foot-actions">
+        <button class="designer-reset" type="button" data-reset-designer>Сбросить вид</button>
+        <button class="designer-done" type="button" data-close-designer>Готово</button>
+      </div>
+    </footer>
+  `;
+
+  syncDesigner();
+}
+
+function syncDesigner() {
+  if (!ui.designerOpen || !el.designerBody || !state) return;
+
+  const appearance = currentAppearance();
+  const settings = state.settings || {};
+  const theme = currentTheme();
+  const accentKey = currentAccentKey();
+  const customAccent = appearance.accentColor;
+
+  el.designerBody.querySelectorAll("[data-designer-theme]").forEach((button) => {
+    const active = button.dataset.designerTheme === theme;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-checked", String(active));
+  });
+
+  el.designerBody.querySelectorAll("[data-designer-accent]").forEach((button) => {
+    const active = !customAccent && button.dataset.designerAccent === accentKey;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  const customSwatch = el.designerBody.querySelector(".designer-swatch--custom");
+  if (customSwatch) {
+    customSwatch.classList.toggle("is-active", Boolean(customAccent));
+    customSwatch.style.setProperty("--swatch", customAccent || defaultAccentColor());
+    const input = customSwatch.querySelector("input[type='color']");
+    if (input && document.activeElement !== input) input.value = customAccent || defaultAccentColor();
+    const mark = customSwatch.querySelector("span");
+    if (mark) mark.innerHTML = customAccent ? "" : icon("plus");
+  }
+
+  el.designerBody.querySelectorAll("[data-color-key]").forEach((input) => {
+    const key = input.dataset.colorKey;
+    const value = appearance[key] || defaultPaletteColor(key);
+    if (document.activeElement !== input) input.value = value;
+    const chip = input.closest(".designer-color-chip");
+    if (chip) chip.style.setProperty("--picked", value);
+  });
+
+  el.designerBody.querySelectorAll("[data-color-text]").forEach((input) => {
+    const key = input.dataset.colorText;
+    const custom = appearance[key];
+    if (document.activeElement !== input) input.value = custom ? custom.toUpperCase() : "";
+    input.placeholder = defaultPaletteColor(key).toUpperCase();
+  });
+
+  el.designerBody.querySelectorAll("[data-color-state]").forEach((label) => {
+    const key = label.dataset.colorState;
+    if (key === "accentColor") {
+      label.textContent = customAccent ? "свой" : "из темы";
+    } else {
+      label.textContent = appearance[key] ? "свой" : "авто";
+    }
+  });
+
+  el.designerBody.querySelectorAll("[data-clear-color]").forEach((button) => {
+    const key = button.dataset.clearColor;
+    button.classList.toggle("is-hidden", !appearance[key]);
+  });
+
+  el.designerBody.querySelectorAll("[data-density-value]").forEach((button) => {
+    const active = button.dataset.densityValue === appearance.density;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  el.designerBody.querySelectorAll("[data-pattern-value]").forEach((button) => {
+    const active = button.dataset.patternValue === appearance.pattern;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  const radius = el.designerBody.querySelector("#designer-radius");
+  if (radius && document.activeElement !== radius) radius.value = String(appearance.radius);
+  const radiusValue = el.designerBody.querySelector("[data-radius-value]");
+  if (radiusValue) radiusValue.textContent = `${appearance.radius}px`;
+
+  const font = el.designerBody.querySelector("#designer-font");
+  if (font && document.activeElement !== font) font.value = appearance.font;
+
+  el.designerBody.querySelectorAll("[data-designer-toggle]").forEach((button) => {
+    const key = button.dataset.designerToggle;
+    const type = button.dataset.toggleType;
+    const active = type === "appearance"
+      ? appearance[key] !== false
+      : settings[key] !== false;
+    button.classList.toggle("is-on", active);
+    button.setAttribute("aria-checked", String(active));
+  });
+
+  const setPreview = (name, value) => {
+    const node = el.designerBody.querySelector(`[data-preview-label="${name}"]`);
+    if (node) node.textContent = value;
+  };
+  setPreview("theme", THEMES[theme].name);
+  setPreview("font", UI_FONTS[appearance.font].name);
+  setPreview("density", DENSITIES[appearance.density].name);
+  setPreview("pattern", PATTERNS[appearance.pattern].name);
+}
+
+function patchAppearance(patch, immediate = false) {
+  if (!state) return;
+
+  const next = { ...currentAppearance(), ...patch };
+  state.settings.appearance = next;
+  applySettings();
+  syncDesigner();
+
+  if (ui.appearanceTimer) clearTimeout(ui.appearanceTimer);
+  const send = () => {
+    ui.appearanceTimer = null;
+    api.updateSettings({ appearance: next });
+  };
+
+  if (immediate) send();
+  else ui.appearanceTimer = setTimeout(send, 80);
+}
+
+function flushAppearancePatch() {
+  if (!ui.appearanceTimer) return;
+  clearTimeout(ui.appearanceTimer);
+  ui.appearanceTimer = null;
+  api.updateSettings({ appearance: currentAppearance() });
+}
+
+function updateDesignerSettings(patch) {
+  flushAppearancePatch();
+  api.updateSettings(patch).then((next) => {
+    if (!next || !state) return;
+    state = next;
+    applySettings();
+    syncDesigner();
+  });
+}
+
+function resetDesigner() {
+  if (!state) return;
+
+  if (ui.appearanceTimer) {
+    clearTimeout(ui.appearanceTimer);
+    ui.appearanceTimer = null;
+  }
+
+  state.settings.theme = "dark";
+  state.settings.accent = "gold";
+  state.settings.showBookmarks = true;
+  state.settings.animations = true;
+  state.settings.appearance = { ...DEFAULT_APPEARANCE };
+  applySettings();
+  syncDesigner();
+
+  api.updateSettings({
+    theme: "dark",
+    accent: "gold",
+    showBookmarks: true,
+    animations: true,
+    appearance: { ...DEFAULT_APPEARANCE }
+  });
+  showToast("Вид сброшен к Lumen");
 }
 
 /* =========================================================
@@ -1299,6 +1981,13 @@ function renderPalette() {
       run: () => openSettings()
     },
     {
+      id: "designer",
+      title: "Редактор интерфейса",
+      sub: "Свои цвета, форма и атмосфера",
+      icon: "spark",
+      run: () => openDesigner()
+    },
+    {
       id: "bookmark",
       title: bookmarked ? "Убрать из закладок" : "Добавить в закладки",
       sub: "Сохранить текущую страницу",
@@ -1442,7 +2131,7 @@ function openPanel(panel) {
 
 function blurOverlayFocus() {
   const active = document.activeElement;
-  if (active && active !== document.body && active.closest?.(".overlay, .palette-overlay, .settings-overlay")) {
+  if (active && active !== document.body && active.closest?.(".overlay, .palette-overlay, .settings-overlay, .designer-overlay")) {
     active.blur();
   }
 }
@@ -1456,15 +2145,17 @@ function closeOverlay() {
 }
 
 function closeAllOverlays() {
-  const anythingOpen = Boolean(ui.panel || ui.paletteOpen || ui.settingsOpen);
+  const anythingOpen = Boolean(ui.panel || ui.paletteOpen || ui.settingsOpen || ui.designerOpen);
 
   ui.panel = null;
   ui.paletteOpen = false;
   ui.settingsOpen = false;
+  ui.designerOpen = false;
 
   if (el.overlay) el.overlay.hidden = true;
   if (el.paletteOverlay) el.paletteOverlay.hidden = true;
   if (el.settingsOverlay) el.settingsOverlay.hidden = true;
+  if (el.designerOverlay) el.designerOverlay.hidden = true;
 
   blurOverlayFocus();
 
@@ -1483,6 +2174,23 @@ function closeSettings() {
   if (!ui.settingsOpen) return;
   ui.settingsOpen = false;
   if (el.settingsOverlay) el.settingsOverlay.hidden = true;
+  blurOverlayFocus();
+  api.setOverlay(false);
+}
+
+function openDesigner() {
+  closeAllOverlays();
+  ui.designerOpen = true;
+  if (el.designerOverlay) el.designerOverlay.hidden = false;
+  renderDesigner();
+  api.setOverlay(true);
+}
+
+function closeDesigner() {
+  if (!ui.designerOpen) return;
+  flushAppearancePatch();
+  ui.designerOpen = false;
+  if (el.designerOverlay) el.designerOverlay.hidden = true;
   blurOverlayFocus();
   api.setOverlay(false);
 }
@@ -1831,6 +2539,11 @@ function bindEvents() {
   });
 
   el.settingsBody?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-open-designer]")) {
+      openDesigner();
+      return;
+    }
+
     const theme = event.target.closest("[data-theme-value]");
     if (theme) {
       api.updateSettings({ theme: theme.dataset.themeValue });
@@ -1848,6 +2561,130 @@ function bindEvents() {
     const key = toggle.dataset.toggle;
     const current = state?.settings?.[key] !== false;
     api.updateSettings({ [key]: !current });
+  });
+
+  el.designerOverlay?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-designer]")) closeDesigner();
+  });
+
+  el.designerBody?.addEventListener("input", (event) => {
+    const color = event.target.closest("[data-color-key]");
+    if (color) {
+      const key = color.dataset.colorKey;
+      const value = normalizeHex(color.value);
+      if (value) patchAppearance({ [key]: value });
+      return;
+    }
+
+    if (event.target.id === "designer-radius") {
+      const value = Math.max(0, Math.min(30, Math.round(Number(event.target.value) || 0)));
+      const output = el.designerBody.querySelector("[data-radius-value]");
+      if (output) output.textContent = `${value}px`;
+      patchAppearance({ radius: value });
+    }
+  });
+
+  el.designerBody?.addEventListener("change", (event) => {
+    const color = event.target.closest("[data-color-text]");
+    if (color) {
+      const key = color.dataset.colorText;
+      const raw = color.value.trim();
+      if (!raw) {
+        patchAppearance({ [key]: "" }, true);
+        return;
+      }
+      const value = normalizeHex(raw);
+      if (!value) {
+        color.value = currentAppearance()[key] ? currentAppearance()[key].toUpperCase() : "";
+        showToast("Цвет нужен в формате #RRGGBB");
+        return;
+      }
+      color.value = value.toUpperCase();
+      patchAppearance({ [key]: value }, true);
+      return;
+    }
+
+    if (event.target.id === "designer-font") {
+      patchAppearance({ font: event.target.value }, true);
+    }
+  });
+
+  el.designerBody?.addEventListener("keydown", (event) => {
+    if (event.target.matches("[data-color-text]") && event.key === "Enter") {
+      event.preventDefault();
+      event.target.blur();
+    }
+  });
+
+  el.designerBody?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-designer]")) {
+      closeDesigner();
+      return;
+    }
+
+    if (event.target.closest("[data-reset-designer]")) {
+      resetDesigner();
+      return;
+    }
+
+    const theme = event.target.closest("[data-designer-theme]");
+    if (theme) {
+      if (state?.settings) {
+        state.settings.theme = theme.dataset.designerTheme;
+        applySettings();
+        syncDesigner();
+      }
+      updateDesignerSettings({ theme: theme.dataset.designerTheme });
+      return;
+    }
+
+    const accent = event.target.closest("[data-designer-accent]");
+    if (accent) {
+      if (state?.settings) {
+        state.settings.accent = accent.dataset.designerAccent;
+        state.settings.appearance = { ...currentAppearance(), accentColor: "" };
+        applySettings();
+        syncDesigner();
+      }
+      updateDesignerSettings({
+        accent: accent.dataset.designerAccent,
+        appearance: { accentColor: "" }
+      });
+      return;
+    }
+
+    const clear = event.target.closest("[data-clear-color]");
+    if (clear) {
+      patchAppearance({ [clear.dataset.clearColor]: "" }, true);
+      return;
+    }
+
+    const density = event.target.closest("[data-density-value]");
+    if (density) {
+      patchAppearance({ density: density.dataset.densityValue }, true);
+      return;
+    }
+
+    const pattern = event.target.closest("[data-pattern-value]");
+    if (pattern) {
+      patchAppearance({ pattern: pattern.dataset.patternValue }, true);
+      return;
+    }
+
+    const toggle = event.target.closest("[data-designer-toggle]");
+    if (!toggle) return;
+    const key = toggle.dataset.designerToggle;
+    if (toggle.dataset.toggleType === "appearance") {
+      patchAppearance({ [key]: !currentAppearance()[key] }, true);
+      return;
+    }
+    const current = state?.settings?.[key] !== false;
+    if (state?.settings) {
+      state.settings[key] = !current;
+      applySettings();
+      syncDesigner();
+    }
+    updateDesignerSettings({ [key]: !current });
   });
 
   document.addEventListener("keydown", handleGlobalKeydown);
@@ -1890,6 +2727,10 @@ function handleGlobalKeydown(event) {
   if (event.key === "Escape") {
     if (ui.paletteOpen) {
       closePalette();
+      return;
+    }
+    if (ui.designerOpen) {
+      closeDesigner();
       return;
     }
     if (ui.settingsOpen) {
