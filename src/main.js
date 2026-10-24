@@ -45,7 +45,8 @@ const DEFAULT_APPEARANCE = {
   density: "cozy",
   font: "manrope",
   pattern: "aurora",
-  glow: true
+  glow: true,
+  layout: {}
 };
 
 const DEFAULT_SETTINGS = {
@@ -167,6 +168,29 @@ function normalizeHexColor(value) {
   return hex;
 }
 
+function normalizeLayout(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+
+  const layout = {};
+  Object.entries(input).forEach(([key, value]) => {
+    if (typeof key !== "string" || !key || key.length > 240) return;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+
+    const x = Math.max(-4000, Math.min(4000, Math.round(Number(value.x) || 0)));
+    const y = Math.max(-4000, Math.min(4000, Math.round(Number(value.y) || 0)));
+    const scale = Math.max(0.35, Math.min(2.5, Number(value.scale) || 1));
+    if (x === 0 && y === 0 && Math.abs(scale - 1) < 0.001) return;
+
+    layout[key] = {
+      x,
+      y,
+      scale: Math.round(scale * 100) / 100
+    };
+  });
+
+  return layout;
+}
+
 function normalizeAppearance(input) {
   const appearance = { ...DEFAULT_APPEARANCE, ...(input || {}) };
   appearance.accentColor = normalizeHexColor(appearance.accentColor);
@@ -178,6 +202,7 @@ function normalizeAppearance(input) {
   appearance.font = UI_FONTS.includes(appearance.font) ? appearance.font : "manrope";
   appearance.pattern = PATTERNS.includes(appearance.pattern) ? appearance.pattern : "aurora";
   appearance.glow = appearance.glow !== false;
+  appearance.layout = normalizeLayout(appearance.layout);
   return appearance;
 }
 

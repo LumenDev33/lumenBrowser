@@ -35,7 +35,8 @@ const DEFAULT_APPEARANCE = {
   density: "cozy",
   font: "manrope",
   pattern: "aurora",
-  glow: true
+  glow: true,
+  layout: {}
 };
 
 const DENSITIES = {
@@ -101,6 +102,9 @@ const ui = {
   paletteItems: [],
   settingsOpen: false,
   designerOpen: false,
+  layoutOpen: false,
+  layoutDeep: false,
+  layoutSaveTimer: null,
   historyQuery: "",
   newtabSignature: "",
   addressTabId: null,
@@ -110,6 +114,17 @@ const ui = {
 };
 
 const el = {};
+
+const layoutSelection = {
+  node: null,
+  key: null,
+  x: 0,
+  y: 0,
+  scale: 1,
+  drag: null,
+  hover: null,
+  suppressClick: false
+};
 
 /* =========================================================
    Utilities
@@ -137,6 +152,29 @@ function normalizeHex(value) {
     hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
   }
   return hex;
+}
+
+function normalizeLayout(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+
+  const layout = {};
+  Object.entries(input).forEach(([key, value]) => {
+    if (typeof key !== "string" || !key || key.length > 240) return;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+
+    const x = Math.max(-4000, Math.min(4000, Math.round(Number(value.x) || 0)));
+    const y = Math.max(-4000, Math.min(4000, Math.round(Number(value.y) || 0)));
+    const scale = Math.max(0.35, Math.min(2.5, Number(value.scale) || 1));
+    if (x === 0 && y === 0 && Math.abs(scale - 1) < 0.001) return;
+
+    layout[key] = {
+      x,
+      y,
+      scale: Math.round(scale * 100) / 100
+    };
+  });
+
+  return layout;
 }
 
 function hexToRgb(hex) {
@@ -205,6 +243,7 @@ function currentAppearance() {
     ? appearance.pattern
     : "aurora";
   appearance.glow = appearance.glow !== false;
+  appearance.layout = normalizeLayout(appearance.layout);
   return appearance;
 }
 
@@ -667,6 +706,8 @@ function cacheDom() {
     "overlay", "drawer-title", "drawer-kicker", "drawer-actions", "drawer-body",
     "palette-overlay", "palette-input", "palette-list",
     "settings-overlay", "settings-body", "designer-overlay", "designer-body",
+    "layout-outline", "layout-outline-label", "layout-bar", "layout-target-name",
+    "layout-scale", "layout-scale-value", "layout-x", "layout-y",
     "toast", "download-dot", "brand-home", "copy-url", "progress",
     "profile-avatar", "profile-name", "profile-meta"
   ];
@@ -681,7 +722,9 @@ function cacheDom() {
 
 async function init() {
   cacheDom();
+  registerLayoutTargets();
   bindEvents();
+  bindLayoutEvents();
 
   api.onState(handleState);
   api.onUiEvent(handleUiEvent);
@@ -742,7 +785,9 @@ function handleState(nextState) {
 
   if (activeChanged) {
     ui.newtabSignature = "";
-    if (ui.panel || ui.paletteOpen || ui.settingsOpen || ui.designerOpen) closeAllOverlays();
+    if (ui.panel || ui.paletteOpen || ui.settingsOpen || ui.designerOpen || ui.layoutOpen) {
+      closeAllOverlays();
+    }
   }
 
   applySettings();
@@ -887,6 +932,631 @@ function applyAppearance(appearance) {
   root.dataset.pattern = appearance.pattern;
   root.dataset.density = appearance.density;
   root.dataset.glow = appearance.glow ? "on" : "off";
+
+  applyLayout(appearance.layout);
+}
+
+/* =========================================================
+   Free layout
+   ========================================================= */
+
+const LAYOUT_TARGETS = [
+  [".sidebar", "sidebar", "Боковая панель"],
+  [".brand", "brand", "Логотип"],
+  [".brand-version", "brand-version", "Версия"],
+  [".new-tab-btn", "new-tab-btn", "Кнопка новой вкладки"],
+  [".tabs-section", "tabs-section", "Блок вкладок"],
+  [".bookmarks-section", "bookmarks-section", "Блок закладок"],
+  [".sidebar-foot", "sidebar-foot", "Нижнее меню"],
+  [".profile", "profile", "Профиль"],
+  [".toolbar", "toolbar", "Панель инструментов"],
+  [".nav-controls", "nav-controls", "Навигация"],
+  [".omnibox", "omnibox", "Адресная строка"],
+  [".toolbar-actions", "toolbar-actions", "Действия панели"],
+  [".window-controls", "window-controls", "Управление окном"],
+  [".page-shell", "page-shell", "Страница"],
+  [".newtab", "newtab", "Новая вкладка"],
+  [".newtab-inner", "newtab-inner", "Содержимое новой вкладки"],
+  [".newtab-top", "newtab-top", "Верхняя строка"],
+  [".newtab-brand", "newtab-brand", "Логотип на стартовой"],
+  [".newtab-date", "newtab-date", "Дата"],
+  [".newtab-hero", "newtab-hero", "Приветствие"],
+  [".newtab-kicker", "newtab-kicker", "Надпись над заголовком"],
+  ["#newtab-greeting", "greeting", "Заголовок приветствия"],
+  [".start-search", "start-search", "Поиск на стартовой"],
+  [".newtab-sub", "newtab-sub", "Подпись под поиском"],
+  [".newtab-columns", "newtab-columns", "Колонки"],
+  [".quick-block", "quick-block", "Быстрый доступ"],
+  [".recent-block", "recent-block", "Недавнее"],
+  [".newtab-foot", "newtab-foot", "Подвал стартовой"],
+  [".quick-grid", "quick-grid", "Сетка ссылок"],
+  [".recent-list", "recent-list", "Список недавнего"]
+];
+
+function registerLayoutTargets() {
+  LAYOUT_TARGETS.forEach(([selector, name, label]) => {
+    document.querySelectorAll(selector).forEach((node) => {
+      if (!node.dataset.layoutName) node.dataset.layoutName = name;
+      if (!node.dataset.layoutLabel) node.dataset.layoutLabel = label;
+    });
+  });
+}
+
+function layoutPath(node) {
+  const parts = [];
+
+  while (node && node.nodeType === 1 && node !== document.body) {
+    if (node.id) {
+      parts.unshift(`#${CSS.escape(node.id)}`);
+      break;
+    }
+
+    let index = 1;
+    let sibling = node;
+    while ((sibling = sibling.previousElementSibling)) {
+      if (sibling.tagName === node.tagName) index += 1;
+    }
+
+    parts.unshift(`${node.tagName.toLowerCase()}:nth-of-type(${index})`);
+    node = node.parentElement;
+  }
+
+  return parts.join(" > ");
+}
+
+function layoutKeyFor(node) {
+  if (!node) return "";
+  if (node.dataset.layoutKey) return node.dataset.layoutKey;
+  if (node.dataset.layoutName) return `name:${node.dataset.layoutName}`;
+  if (node.id) return `#${CSS.escape(node.id)}`;
+  return layoutPath(node);
+}
+
+function resolveLayoutNode(key) {
+  if (!key) return null;
+
+  try {
+    if (key.startsWith("name:")) {
+      const name = key.slice(5);
+      return Array.from(document.querySelectorAll("[data-layout-name]"))
+        .find((node) => node.dataset.layoutName === name) || null;
+    }
+    return document.querySelector(key);
+  } catch {
+    return null;
+  }
+}
+
+function isLayoutChrome(node) {
+  return Boolean(
+    node &&
+    node.closest?.(
+      ".layout-bar, .layout-outline, .overlay, .palette-overlay, .settings-overlay, .designer-overlay, .native-page"
+    )
+  );
+}
+
+function labelForLayoutNode(node) {
+  if (!node) return "Элемент";
+  if (node.dataset.layoutLabel) return node.dataset.layoutLabel;
+  if (node.getAttribute("aria-label")) return node.getAttribute("aria-label");
+  if (node.title) return node.title;
+  if (node.id) return `#${node.id}`;
+
+  const className = String(node.className || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(".");
+
+  return className ? `${node.tagName.toLowerCase()}.${className}` : node.tagName.toLowerCase();
+}
+
+function applyLayoutValue(node, value) {
+  if (!node) return;
+  const x = Number(value?.x) || 0;
+  const y = Number(value?.y) || 0;
+  const scale = Math.max(0.35, Math.min(2.5, Number(value?.scale) || 1));
+
+  node.style.setProperty("--layout-x", `${x}px`);
+  node.style.setProperty("--layout-y", `${y}px`);
+  node.style.setProperty("--layout-scale", String(scale));
+  node.classList.add("layout-transformed");
+}
+
+function clearLayoutValue(node) {
+  if (!node) return;
+  node.classList.remove("layout-transformed");
+  node.style.removeProperty("--layout-x");
+  node.style.removeProperty("--layout-y");
+  node.style.removeProperty("--layout-scale");
+}
+
+function applyLayout(layout) {
+  document.querySelectorAll(".layout-transformed").forEach((node) => {
+    clearLayoutValue(node);
+    delete node.dataset.layoutKey;
+  });
+
+  Object.entries(normalizeLayout(layout)).forEach(([key, value]) => {
+    const node = resolveLayoutNode(key);
+    if (!node || isLayoutChrome(node) || node === document.body) return;
+    node.dataset.layoutKey = key;
+    applyLayoutValue(node, value);
+  });
+
+  requestAnimationFrame(() => {
+    updateLayoutOutline();
+    scheduleBounds();
+  });
+}
+
+function currentLayout() {
+  return normalizeLayout(currentAppearance().layout);
+}
+
+function layoutValueFor(key) {
+  return currentLayout()[key] || { x: 0, y: 0, scale: 1 };
+}
+
+function syncLayoutBar() {
+  if (!el.layoutBar) return;
+
+  const selected = layoutSelection.node;
+  const hasSelection = Boolean(selected && selected.isConnected);
+  if (el.layoutTargetName) {
+    el.layoutTargetName.textContent = hasSelection
+      ? labelForLayoutNode(selected)
+      : "Выберите элемент";
+  }
+
+  [el.layoutScale, el.layoutX, el.layoutY].forEach((input) => {
+    if (input) input.disabled = !hasSelection;
+  });
+  el.layoutBar.querySelector("[data-layout-reset-item]")?.toggleAttribute("disabled", !hasSelection);
+  el.layoutBar.querySelector("[data-layout-deep]")?.classList.toggle("is-active", ui.layoutDeep);
+  el.layoutBar.querySelector("[data-layout-deep]")?.setAttribute("aria-pressed", String(ui.layoutDeep));
+
+  if (!hasSelection) {
+    if (el.layoutScale) el.layoutScale.value = "100";
+    if (el.layoutScaleValue) el.layoutScaleValue.textContent = "100%";
+    if (el.layoutX) el.layoutX.value = "0";
+    if (el.layoutY) el.layoutY.value = "0";
+    return;
+  }
+
+  const value = layoutValueFor(layoutSelection.key);
+  layoutSelection.x = value.x;
+  layoutSelection.y = value.y;
+  layoutSelection.scale = value.scale;
+
+  if (el.layoutScale && document.activeElement !== el.layoutScale) {
+    el.layoutScale.value = String(Math.round(value.scale * 100));
+  }
+  if (el.layoutScaleValue) {
+    el.layoutScaleValue.textContent = `${Math.round(value.scale * 100)}%`;
+  }
+  if (el.layoutX && document.activeElement !== el.layoutX) el.layoutX.value = String(value.x);
+  if (el.layoutY && document.activeElement !== el.layoutY) el.layoutY.value = String(value.y);
+}
+
+function updateLayoutOutline() {
+  if (!el.layoutOutline) return;
+
+  const node = layoutSelection.node;
+  if (!ui.layoutOpen || !node || !node.isConnected) {
+    el.layoutOutline.hidden = true;
+    return;
+  }
+
+  const rect = node.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) {
+    el.layoutOutline.hidden = true;
+    return;
+  }
+
+  el.layoutOutline.hidden = false;
+  el.layoutOutline.style.left = `${rect.left}px`;
+  el.layoutOutline.style.top = `${rect.top}px`;
+  el.layoutOutline.style.width = `${rect.width}px`;
+  el.layoutOutline.style.height = `${rect.height}px`;
+
+  if (el.layoutOutlineLabel) {
+    el.layoutOutlineLabel.textContent = labelForLayoutNode(node);
+  }
+}
+
+function selectLayoutNode(node) {
+  if (!node || isLayoutChrome(node)) return;
+
+  if (layoutSelection.hover) {
+    layoutSelection.hover.classList.remove("layout-hover");
+    layoutSelection.hover = null;
+  }
+
+  layoutSelection.node = node;
+  layoutSelection.key = layoutKeyFor(node);
+  const value = layoutValueFor(layoutSelection.key);
+  layoutSelection.x = value.x;
+  layoutSelection.y = value.y;
+  layoutSelection.scale = value.scale;
+
+  syncLayoutBar();
+  requestAnimationFrame(updateLayoutOutline);
+}
+
+function layoutTargetFromEvent(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return null;
+  if (isLayoutChrome(target)) return null;
+
+  if (!ui.layoutDeep) {
+    const named = target.closest("[data-layout-name]");
+    if (named && !isLayoutChrome(named)) return named;
+  }
+
+  let node = target;
+  while (
+    node &&
+    node !== document.body &&
+    (node instanceof SVGElement ||
+      ["SVG", "USE", "PATH", "SPAN", "B", "SMALL", "KBD"].includes(node.tagName))
+  ) {
+    node = node.parentElement;
+  }
+
+  if (node && node !== document.body && el.app?.contains(node)) return node;
+  return el.app?.contains(target) ? target : null;
+}
+
+function setLayoutValue(node, key, patch, save = true) {
+  if (!node || !key || !state) return;
+
+  const nextLayout = { ...currentLayout() };
+  const previous = nextLayout[key] || { x: 0, y: 0, scale: 1 };
+  const value = {
+    x: Math.max(-4000, Math.min(4000, Math.round(Number(patch.x ?? previous.x) || 0))),
+    y: Math.max(-4000, Math.min(4000, Math.round(Number(patch.y ?? previous.y) || 0))),
+    scale: Math.max(0.35, Math.min(2.5, Number(patch.scale ?? previous.scale) || 1))
+  };
+
+  if (value.x === 0 && value.y === 0 && Math.abs(value.scale - 1) < 0.001) {
+    delete nextLayout[key];
+    clearLayoutValue(node);
+    delete node.dataset.layoutKey;
+  } else {
+    nextLayout[key] = value;
+    node.dataset.layoutKey = key;
+    applyLayoutValue(node, value);
+  }
+
+  state.settings.appearance = { ...currentAppearance(), layout: nextLayout };
+  layoutSelection.x = value.x;
+  layoutSelection.y = value.y;
+  layoutSelection.scale = value.scale;
+  syncLayoutBar();
+  updateLayoutOutline();
+
+  if (save) scheduleLayoutSave();
+}
+
+function scheduleLayoutSave() {
+  if (ui.layoutSaveTimer) clearTimeout(ui.layoutSaveTimer);
+  ui.layoutSaveTimer = setTimeout(() => {
+    ui.layoutSaveTimer = null;
+    if (!state) return;
+    api.updateSettings({ appearance: { layout: currentLayout() } });
+  }, 120);
+}
+
+function flushLayoutSave() {
+  if (!ui.layoutSaveTimer) return;
+  clearTimeout(ui.layoutSaveTimer);
+  ui.layoutSaveTimer = null;
+  if (state) api.updateSettings({ appearance: { layout: currentLayout() } });
+}
+
+function resetSelectedLayout() {
+  if (!layoutSelection.node || !layoutSelection.key) return;
+  setLayoutValue(layoutSelection.node, layoutSelection.key, { x: 0, y: 0, scale: 1 }, true);
+  showToast("Элемент возвращён на место");
+}
+
+function resetAllLayout() {
+  if (!state) return;
+  state.settings.appearance = { ...currentAppearance(), layout: {} };
+  applySettings();
+  syncLayoutBar();
+  scheduleLayoutSave();
+  showToast("Компоновка сброшена");
+}
+
+function openLayoutMode() {
+  closeAllOverlays();
+
+  registerLayoutTargets();
+  ui.layoutOpen = true;
+  document.body.classList.add("layout-mode");
+  if (el.layoutBar) el.layoutBar.hidden = false;
+  if (el.layoutOutline) el.layoutOutline.hidden = true;
+  layoutSelection.node = null;
+  layoutSelection.key = null;
+  layoutSelection.hover = null;
+  syncLayoutBar();
+  applyLayout(currentLayout());
+  api.setOverlay(true);
+}
+
+function closeLayoutMode() {
+  if (!ui.layoutOpen) return;
+
+  flushLayoutSave();
+  ui.layoutOpen = false;
+  ui.layoutDeep = false;
+  document.body.classList.remove("layout-mode");
+
+  if (layoutSelection.hover) {
+    layoutSelection.hover.classList.remove("layout-hover");
+    layoutSelection.hover = null;
+  }
+
+  layoutSelection.node = null;
+  layoutSelection.key = null;
+  layoutSelection.drag = null;
+  layoutSelection.suppressClick = false;
+
+  if (el.layoutBar) el.layoutBar.hidden = true;
+  if (el.layoutOutline) el.layoutOutline.hidden = true;
+
+  api.setOverlay(false);
+  requestAnimationFrame(() => {
+    updateLayoutOutline();
+    scheduleBounds();
+  });
+}
+
+function beginLayoutDrag(event, node) {
+  if (!node) return;
+  selectLayoutNode(node);
+
+  const value = layoutValueFor(layoutSelection.key);
+  layoutSelection.drag = {
+    type: "move",
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    baseX: value.x,
+    baseY: value.y,
+    baseScale: value.scale,
+    node,
+    key: layoutSelection.key
+  };
+  layoutSelection.suppressClick = true;
+  document.body.classList.add("layout-dragging");
+}
+
+function beginLayoutScale(event) {
+  const node = layoutSelection.node;
+  if (!node || !layoutSelection.key) return;
+
+  const rect = node.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  const startDistance = Math.max(
+    24,
+    Math.hypot(event.clientX - centerX, event.clientY - centerY)
+  );
+  const scaleRange = Math.max(140, Math.max(rect.width, rect.height) * 0.45);
+
+  layoutSelection.drag = {
+    type: "scale",
+    pointerId: event.pointerId,
+    startDistance,
+    scaleRange,
+    centerX,
+    centerY,
+    baseScale: layoutSelection.scale,
+    node,
+    key: layoutSelection.key
+  };
+  layoutSelection.suppressClick = true;
+  document.body.classList.add("layout-dragging");
+}
+
+function handleLayoutPointerMove(event) {
+  if (!ui.layoutOpen) return;
+  const drag = layoutSelection.drag;
+
+  if (!drag) {
+    const node = layoutTargetFromEvent(event);
+    if (node !== layoutSelection.hover) {
+      if (layoutSelection.hover) layoutSelection.hover.classList.remove("layout-hover");
+      layoutSelection.hover = node;
+      if (node) node.classList.add("layout-hover");
+    }
+    return;
+  }
+
+  event.preventDefault();
+
+  if (drag.type === "move") {
+    let x = drag.baseX + (event.clientX - drag.startX);
+    let y = drag.baseY + (event.clientY - drag.startY);
+    if (event.shiftKey) {
+      x = Math.round(x / 10) * 10;
+      y = Math.round(y / 10) * 10;
+    }
+    setLayoutValue(drag.node, drag.key, { x, y, scale: drag.baseScale }, false);
+  } else {
+    const distance = Math.hypot(event.clientX - drag.centerX, event.clientY - drag.centerY);
+    const delta = distance - drag.startDistance;
+    let scale = drag.baseScale * (1 + delta / drag.scaleRange);
+    scale = Math.max(0.35, Math.min(2.5, Math.round(scale * 100) / 100));
+    setLayoutValue(drag.node, drag.key, {
+      x: layoutSelection.x,
+      y: layoutSelection.y,
+      scale
+    }, false);
+  }
+}
+
+function finishLayoutDrag() {
+  if (!layoutSelection.drag) return;
+  layoutSelection.drag = null;
+  document.body.classList.remove("layout-dragging");
+  syncLayoutBar();
+  scheduleLayoutSave();
+  setTimeout(() => {
+    layoutSelection.suppressClick = false;
+  }, 0);
+}
+
+function handleLayoutPointerDown(event) {
+  if (!ui.layoutOpen) return;
+  if (event.button !== 0 && event.pointerType !== "touch") return;
+
+  if (event.target.closest?.("#layout-bar")) return;
+
+  const handle = event.target.closest?.("[data-layout-handle='scale']");
+  if (handle) {
+    event.preventDefault();
+    event.stopPropagation();
+    beginLayoutScale(event);
+    return;
+  }
+
+  const node = layoutTargetFromEvent(event);
+  if (!node) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  beginLayoutDrag(event, node);
+}
+
+function handleLayoutPointerUp() {
+  finishLayoutDrag();
+}
+
+function handleLayoutClick(event) {
+  if (!ui.layoutOpen) return;
+  if (event.target.closest?.("#layout-bar")) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function handleLayoutBarClick(event) {
+  if (event.target.closest("[data-layout-done]")) {
+    closeLayoutMode();
+    return;
+  }
+
+  if (event.target.closest("[data-layout-reset-item]")) {
+    resetSelectedLayout();
+    return;
+  }
+
+  if (event.target.closest("[data-layout-reset-all]")) {
+    resetAllLayout();
+    return;
+  }
+
+  const deep = event.target.closest("[data-layout-deep]");
+  if (deep) {
+    ui.layoutDeep = !ui.layoutDeep;
+    syncLayoutBar();
+  }
+}
+
+function handleLayoutBarInput(event) {
+  if (!layoutSelection.node || !layoutSelection.key) return;
+
+  if (event.target.id === "layout-scale") {
+    const value = Math.max(35, Math.min(250, Number(event.target.value) || 100));
+    if (el.layoutScaleValue) el.layoutScaleValue.textContent = `${value}%`;
+    setLayoutValue(layoutSelection.node, layoutSelection.key, {
+      x: layoutSelection.x,
+      y: layoutSelection.y,
+      scale: value / 100
+    }, false);
+    scheduleLayoutSave();
+    return;
+  }
+
+  if (event.target.id === "layout-x") {
+    setLayoutValue(layoutSelection.node, layoutSelection.key, {
+      x: Number(event.target.value) || 0,
+      y: layoutSelection.y,
+      scale: layoutSelection.scale
+    }, false);
+    scheduleLayoutSave();
+    return;
+  }
+
+  if (event.target.id === "layout-y") {
+    setLayoutValue(layoutSelection.node, layoutSelection.key, {
+      x: layoutSelection.x,
+      y: Number(event.target.value) || 0,
+      scale: layoutSelection.scale
+    }, false);
+    scheduleLayoutSave();
+  }
+}
+
+function bindLayoutEvents() {
+  el.layoutBar?.addEventListener("click", handleLayoutBarClick);
+  el.layoutBar?.addEventListener("input", handleLayoutBarInput);
+
+  document.addEventListener("pointerdown", handleLayoutPointerDown, true);
+  document.addEventListener("pointermove", handleLayoutPointerMove, true);
+  document.addEventListener("pointerup", handleLayoutPointerUp, true);
+  document.addEventListener("pointercancel", handleLayoutPointerUp, true);
+  document.addEventListener("click", handleLayoutClick, true);
+  document.addEventListener("mouseleave", () => {
+    if (layoutSelection.hover) {
+      layoutSelection.hover.classList.remove("layout-hover");
+      layoutSelection.hover = null;
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (ui.layoutOpen) requestAnimationFrame(updateLayoutOutline);
+  });
+}
+
+function handleLayoutKeydown(event) {
+  if (event.target.closest?.("#layout-bar")) return;
+
+  const key = String(event.key || "").toLowerCase();
+
+  if (key === "escape") {
+    event.preventDefault();
+    closeLayoutMode();
+    return;
+  }
+
+  if (!layoutSelection.node || !layoutSelection.key) return;
+
+  if (key === "delete" || key === "backspace") {
+    event.preventDefault();
+    resetSelectedLayout();
+    return;
+  }
+
+  const step = event.shiftKey ? 10 : 1;
+  const positions = {
+    arrowleft: [-step, 0],
+    arrowright: [step, 0],
+    arrowup: [0, -step],
+    arrowdown: [0, step]
+  };
+  const delta = positions[key];
+  if (!delta) return;
+
+  event.preventDefault();
+  setLayoutValue(layoutSelection.node, layoutSelection.key, {
+    x: layoutSelection.x + delta[0],
+    y: layoutSelection.y + delta[1],
+    scale: layoutSelection.scale
+  }, true);
 }
 
 function scheduleBounds() {
@@ -918,6 +1588,9 @@ function updateClock() {
   if (greetingElement) {
     greetingElement.innerHTML = greetingMarkup();
   }
+
+  const layout = currentLayout();
+  if (Object.keys(layout).length) applyLayout(layout);
 }
 
 function renderProfile() {
@@ -951,6 +1624,13 @@ function renderAll() {
   if (ui.settingsOpen) renderSettings();
   if (ui.designerOpen) syncDesigner();
   if (ui.paletteOpen) renderPalette();
+  if (ui.layoutOpen) {
+    syncLayoutBar();
+    requestAnimationFrame(updateLayoutOutline);
+  }
+
+  const layout = currentLayout();
+  if (Object.keys(layout).length) applyLayout(layout);
 }
 
 function renderTabs() {
@@ -1391,7 +2071,7 @@ function renderSettings() {
 
     <div class="settings-foot">
       <span>Настройки сохраняются локально на этом устройстве.</span>
-      <b>LUMEN 1.2</b>
+      <b>LUMEN 1.3</b>
     </div>
   `;
 }
@@ -1568,6 +2248,24 @@ function renderDesigner() {
             ${toggle("glow", "Свечение", "мягкие цветные ореолы", appearance.glow !== false, "appearance")}
             ${toggle("showBookmarks", "Закладки в панели", "быстрый доступ слева", settings.showBookmarks !== false)}
             ${toggle("animations", "Анимации", "плавные переходы", settings.animations !== false)}
+          </div>
+        </section>
+
+        <section class="designer-section">
+          <header class="designer-section-head">
+            <span class="designer-index">04</span>
+            <div><h3>Компоновка</h3><p>Двигайте и масштабируйте элементы прямо в браузере.</p></div>
+          </header>
+
+          <div class="designer-layout-cta">
+            <div class="designer-layout-copy">
+              <b>Свободное расположение</b>
+              <p>Перетаскивайте панели, кнопки и блоки. Тяните угол, чтобы уменьшить или увеличить элемент. Раскладка сохранится автоматически.</p>
+            </div>
+            <button class="designer-layout-btn" type="button" data-open-layout>
+              ${icon("move")}
+              <span>Открыть компоновку</span>
+            </button>
           </div>
         </section>
       </div>
@@ -1988,6 +2686,13 @@ function renderPalette() {
       run: () => openDesigner()
     },
     {
+      id: "layout",
+      title: "Компоновка интерфейса",
+      sub: "Двигать и масштабировать элементы",
+      icon: "move",
+      run: () => openLayoutMode()
+    },
+    {
       id: "bookmark",
       title: bookmarked ? "Убрать из закладок" : "Добавить в закладки",
       sub: "Сохранить текущую страницу",
@@ -2145,7 +2850,11 @@ function closeOverlay() {
 }
 
 function closeAllOverlays() {
-  const anythingOpen = Boolean(ui.panel || ui.paletteOpen || ui.settingsOpen || ui.designerOpen);
+  const anythingOpen = Boolean(
+    ui.panel || ui.paletteOpen || ui.settingsOpen || ui.designerOpen || ui.layoutOpen
+  );
+
+  if (ui.layoutOpen) closeLayoutMode();
 
   ui.panel = null;
   ui.paletteOpen = false;
@@ -2627,6 +3336,11 @@ function bindEvents() {
       return;
     }
 
+    if (event.target.closest("[data-open-layout]")) {
+      openLayoutMode();
+      return;
+    }
+
     const theme = event.target.closest("[data-designer-theme]");
     if (theme) {
       if (state?.settings) {
@@ -2691,6 +3405,11 @@ function bindEvents() {
 }
 
 function handleGlobalKeydown(event) {
+  if (ui.layoutOpen) {
+    handleLayoutKeydown(event);
+    return;
+  }
+
   const modifier = event.ctrlKey || event.metaKey;
   const key = String(event.key || "").toLowerCase();
 
