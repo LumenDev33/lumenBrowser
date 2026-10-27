@@ -29,6 +29,15 @@ contextBridge.exposeInMainWorld("lumen", {
   reload: () => invoke("lumen:reload"),
   stop: () => invoke("lumen:stop"),
   reopenClosed: () => invoke("lumen:reopen-closed"),
+  openTabs: (urls) => invoke("lumen:open-tabs", urls),
+
+  saveSpace: (payload) => invoke("lumen:save-space", payload),
+  openSpace: (id) => invoke("lumen:open-space", id),
+  deleteSpace: (id) => invoke("lumen:delete-space", id),
+
+  saveNote: (payload) => invoke("lumen:save-note", payload),
+  removeNote: (id) => invoke("lumen:remove-note", id),
+  resetShield: () => invoke("lumen:reset-shield"),
 
   toggleBookmark: () => invoke("lumen:toggle-bookmark"),
   removeBookmark: (id) => invoke("lumen:remove-bookmark", id),

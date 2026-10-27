@@ -35,6 +35,38 @@ const THEMES = ["dark", "light", "system"];
 const DENSITIES = ["compact", "cozy", "airy"];
 const UI_FONTS = ["manrope", "unbounded", "lora", "mono"];
 const PATTERNS = ["aurora", "mesh", "grid", "dots", "solid"];
+const SPACE_COLORS = ["#a855f7", "#60a5fa", "#34d399", "#fbbf24", "#fb7185", "#22d3ee"];
+
+// A small, deliberately conservative local blocklist. It targets common
+// analytics and ad exchanges, not first-party content delivery.
+const TRACKER_HOSTS = [
+  "doubleclick.net",
+  "googletagmanager.com",
+  "google-analytics.com",
+  "analytics.google.com",
+  "googlesyndication.com",
+  "googleadservices.com",
+  "connect.facebook.net",
+  "facebook.net",
+  "scorecardresearch.com",
+  "hotjar.com",
+  "mixpanel.com",
+  "segment.io",
+  "amplitude.com",
+  "fullstory.com",
+  "mouseflow.com",
+  "crazyegg.com",
+  "quantserve.com",
+  "criteo.com",
+  "taboola.com",
+  "outbrain.com",
+  "adnxs.com",
+  "rubiconproject.com",
+  "pubmatic.com",
+  "openx.net",
+  "casalemedia.com",
+  "smartadserver.com"
+];
 
 const DEFAULT_APPEARANCE = {
   accentColor: "",
@@ -56,6 +88,7 @@ const DEFAULT_SETTINGS = {
   accent: "gold",
   showBookmarks: true,
   animations: true,
+  shield: true,
   appearance: { ...DEFAULT_APPEARANCE }
 };
 
@@ -116,11 +149,16 @@ let overlayOpen = false;
 let contentBounds = { x: 318, y: 70, width: 1040, height: 800 };
 let saveTimer = null;
 let broadcastTimer = null;
+let shieldBroadcastTimer = null;
+const shieldStats = { blocked: 0, recent: [] };
 let store = {
   settings: { ...DEFAULT_SETTINGS },
   bookmarks: DEFAULT_BOOKMARKS.map((bookmark) => ({ ...bookmark })),
   history: [],
   downloads: [],
+  spaces: [],
+  notes: [],
+  shield: { total: 0, recent: [] },
   session: null
 };
 
@@ -152,6 +190,15 @@ function cleanName(value) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 32);
+}
+
+function cleanTitle(value, fallback = "") {
+  const title = String(value == null ? "" : value)
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  return title || fallback;
 }
 
 function normalizeTheme(value) {
@@ -191,6 +238,69 @@ function normalizeLayout(input) {
   return layout;
 }
 
+function normalizeSpace(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+
+  const tabs = (Array.isArray(input.tabs) ? input.tabs : [])
+    .filter((tab) => tab && typeof tab.url === "string" && /^(https?|file):/i.test(tab.url))
+    .slice(0, 20)
+    .map((tab) => ({
+      url: tab.url.slice(0, 2048),
+      title: cleanTitle(tab.title, hostOf(tab.url)),
+      favicon: typeof tab.favicon === "string" ? tab.favicon.slice(0, 2048) : null
+    }));
+
+  return {
+    id:
+      typeof input.id === "string" && input.id.length > 0 && input.id.length <= 80
+        ? input.id
+        : nowId("space"),
+    name: cleanName(input.name).slice(0, 40) || "Пространство",
+    color: normalizeHexColor(input.color) || SPACE_COLORS[0],
+    tabs,
+    createdAt: Number(input.createdAt) || Date.now(),
+    updatedAt: Number(input.updatedAt) || Number(input.createdAt) || Date.now()
+  };
+}
+
+function normalizeNote(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+
+  const url = typeof input.url === "string" ? input.url.trim().slice(0, 2048) : "";
+  if (!/^https?:/i.test(url)) return null;
+
+  const text = typeof input.text === "string" ? input.text.replace(/\u0000/g, "").slice(0, 20000) : "";
+  if (!text.trim()) return null;
+
+  return {
+    id:
+      typeof input.id === "string" && input.id.length > 0 && input.id.length <= 80
+        ? input.id
+        : nowId("note"),
+    url,
+    title: cleanTitle(input.title, hostOf(url)),
+    domain: hostOf(url),
+    text,
+    updatedAt: Number(input.updatedAt) || Date.now()
+  };
+}
+
+function normalizeShield(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const recent = (Array.isArray(source.recent) ? source.recent : [])
+    .filter((item) => item && typeof item.host === "string")
+    .slice(0, 30)
+    .map((item) => ({
+      host: item.host.slice(0, 120),
+      at: Number(item.at) || Date.now()
+    }));
+
+  return {
+    total: Math.max(0, Math.min(99999999, Math.round(Number(source.total) || 0))),
+    recent
+  };
+}
+
 function normalizeAppearance(input) {
   const appearance = { ...DEFAULT_APPEARANCE, ...(input || {}) };
   appearance.accentColor = normalizeHexColor(appearance.accentColor);
@@ -222,6 +332,7 @@ function normalizeSettings(input) {
   settings.accent = ACCENTS.includes(settings.accent) ? settings.accent : "gold";
   settings.showBookmarks = settings.showBookmarks !== false;
   settings.animations = settings.animations !== false;
+  settings.shield = settings.shield !== false;
   settings.appearance = normalizeAppearance(settings.appearance);
 
   return settings;
@@ -231,11 +342,23 @@ function loadStore() {
   try {
     if (!fs.existsSync(STORE_FILE)) return;
     const parsed = JSON.parse(fs.readFileSync(STORE_FILE, "utf8"));
+    const notes = (Array.isArray(parsed.notes) ? parsed.notes : [])
+      .map(normalizeNote)
+      .filter(Boolean)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 200);
+
     store = {
       settings: normalizeSettings(parsed.settings),
       bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : [],
       history: Array.isArray(parsed.history) ? parsed.history : [],
       downloads: Array.isArray(parsed.downloads) ? parsed.downloads : [],
+      spaces: (Array.isArray(parsed.spaces) ? parsed.spaces : [])
+        .map(normalizeSpace)
+        .filter(Boolean)
+        .slice(0, 30),
+      notes,
+      shield: normalizeShield(parsed.shield),
       session: parsed.session || null
     };
   } catch (error) {
@@ -317,7 +440,20 @@ function normalizeInput(input) {
 function safeTitle(tab) {
   if (!tab) return "Lumen";
   if (tab.isNewTab) return "Новая вкладка";
-  return tab.title || hostOf(tab.url) || "Lumen";
+  const title = tab.title && tab.title !== "Загрузка..." ? tab.title : "";
+  if (title) return title;
+
+  if (/^file:/i.test(tab.url || "")) {
+    try {
+      const name = decodeURIComponent(new URL(tab.url).pathname)
+        .split("/")
+        .filter(Boolean)
+        .pop();
+      if (name) return name;
+    } catch {}
+  }
+
+  return hostOf(tab.url) || "Lumen";
 }
 
 function publicTab(tab) {
@@ -344,6 +480,14 @@ function publicState() {
     bookmarks: store.bookmarks,
     history: store.history.slice(0, 120),
     downloads: store.downloads,
+    spaces: store.spaces,
+    notes: store.notes.slice(0, 100),
+    shield: {
+      enabled: store.settings.shield !== false,
+      sessionBlocked: shieldStats.blocked,
+      total: store.shield.total,
+      recent: (shieldStats.recent.length ? shieldStats.recent : store.shield.recent).slice(0, 20)
+    },
     settings: store.settings,
     maximized: mainWindow ? mainWindow.isMaximized() : false,
     canReopen: closedTabs.length > 0
@@ -421,6 +565,52 @@ function setupDownloads() {
   });
 }
 
+/* ---------- local privacy shield ---------- */
+
+function isTrackerUrl(rawUrl) {
+  let host = "";
+  try {
+    host = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return false;
+  }
+  return TRACKER_HOSTS.some((tracker) => host === tracker || host.endsWith(`.${tracker}`));
+}
+
+function scheduleShieldBroadcast() {
+  if (shieldBroadcastTimer) return;
+  shieldBroadcastTimer = setTimeout(() => {
+    shieldBroadcastTimer = null;
+    broadcast();
+  }, 250);
+}
+
+function setupShield() {
+  session.defaultSession.webRequest.onBeforeRequest(
+    { urls: ["*://*/*"] },
+    (details, callback) => {
+      if (
+        store.settings.shield === false ||
+        details.resourceType === "mainFrame" ||
+        !isTrackerUrl(details.url)
+      ) {
+        callback({});
+        return;
+      }
+
+      shieldStats.blocked += 1;
+      store.shield.total += 1;
+      shieldStats.recent.unshift({ host: hostOf(details.url), at: Date.now() });
+      shieldStats.recent = shieldStats.recent.slice(0, 20);
+      store.shield.recent = shieldStats.recent.slice(0, 20);
+
+      if (shieldStats.blocked % 5 === 0) debounceSave();
+      scheduleShieldBroadcast();
+      callback({ cancel: true });
+    }
+  );
+}
+
 /* ---------- tabs & page views ---------- */
 
 function getActiveTab() {
@@ -458,6 +648,44 @@ function createTab(url = null, options = {}) {
   }
 
   return tab;
+}
+
+function openTabs(urls, options = {}) {
+  const list = (Array.isArray(urls) ? urls : [])
+    .filter((url) => typeof url === "string" && /^(https?|file):/i.test(url))
+    .slice(0, 12);
+
+  if (!list.length) return [];
+
+  const existing = new Map(
+    tabs.filter((tab) => !tab.isNewTab && tab.url).map((tab) => [tab.url, tab])
+  );
+  const opened = [];
+
+  for (const url of list) {
+    if (existing.has(url)) {
+      opened.push(existing.get(url));
+      continue;
+    }
+    const tab = createTab(url, { activate: false, silent: true });
+    existing.set(url, tab);
+    opened.push(tab);
+  }
+
+  if (opened.length && options.activate !== false) {
+    activeTabId = opened[0].id;
+    syncViews();
+    broadcast();
+
+    if (!overlayOpen) {
+      const tab = opened[0];
+      if (tab.view && !tab.isNewTab && !tab.error) {
+        tab.view.webContents.focus();
+      }
+    }
+  }
+
+  return opened;
 }
 
 function ensureView(tab) {
@@ -1205,6 +1433,126 @@ function setupIpc() {
     return publicState();
   });
 
+  ipcMain.handle("lumen:open-tabs", (_event, urls) => {
+    openTabs(urls);
+    return publicState();
+  });
+
+  ipcMain.handle("lumen:save-space", (_event, payload) => {
+    if (!payload || typeof payload !== "object") return publicState();
+
+    const currentTabs = tabs
+      .filter((tab) => !tab.isNewTab && tab.url && tab.url !== NEWTAB)
+      .map((tab) => ({
+        url: tab.view?.webContents.getURL() || tab.url,
+        title: safeTitle(tab),
+        favicon: tab.favicon || null
+      }));
+
+    const id = typeof payload.id === "string" ? payload.id : "";
+    const name = cleanName(payload.name).slice(0, 40);
+    let space = id ? store.spaces.find((item) => item.id === id) : null;
+
+    if (payload.useCurrentTabs) {
+      if (!currentTabs.length) return publicState();
+
+      if (space) {
+        space.tabs = currentTabs;
+        space.updatedAt = Date.now();
+        if (name) space.name = name;
+      } else {
+        space = {
+          id: nowId("space"),
+          name: name || `Пространство ${store.spaces.length + 1}`,
+          color: SPACE_COLORS[store.spaces.length % SPACE_COLORS.length],
+          tabs: currentTabs,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        store.spaces.unshift(space);
+      }
+    } else if (space && name) {
+      space.name = name;
+      space.updatedAt = Date.now();
+    } else {
+      return publicState();
+    }
+
+    store.spaces = store.spaces.slice(0, 30);
+    debounceSave();
+    broadcast();
+    return publicState();
+  });
+
+  ipcMain.handle("lumen:open-space", (_event, id) => {
+    const space = store.spaces.find((item) => item.id === id);
+    if (!space) return publicState();
+    openTabs(space.tabs.map((tab) => tab.url));
+    return publicState();
+  });
+
+  ipcMain.handle("lumen:delete-space", (_event, id) => {
+    store.spaces = store.spaces.filter((item) => item.id !== id);
+    debounceSave();
+    broadcast();
+    return publicState();
+  });
+
+  ipcMain.handle("lumen:save-note", (_event, payload) => {
+    if (!payload || typeof payload !== "object") return publicState();
+
+    const url = typeof payload.url === "string" ? payload.url.trim().slice(0, 2048) : "";
+    if (!/^https?:/i.test(url)) return publicState();
+
+    const text =
+      typeof payload.text === "string"
+        ? payload.text.replace(/\u0000/g, "").slice(0, 20000)
+        : "";
+    const title = cleanTitle(payload.title, hostOf(url));
+    let note = store.notes.find((item) => item.url === url);
+
+    if (!text.trim()) {
+      store.notes = store.notes.filter((item) => item.url !== url);
+    } else if (note) {
+      note.text = text;
+      note.title = title;
+      note.domain = hostOf(url);
+      note.updatedAt = Date.now();
+    } else {
+      note = {
+        id: nowId("note"),
+        url,
+        title,
+        domain: hostOf(url),
+        text,
+        updatedAt: Date.now()
+      };
+      store.notes.unshift(note);
+    }
+
+    store.notes.sort((a, b) => b.updatedAt - a.updatedAt);
+    store.notes = store.notes.slice(0, 200);
+    debounceSave();
+    broadcast();
+    return publicState();
+  });
+
+  ipcMain.handle("lumen:remove-note", (_event, id) => {
+    store.notes = store.notes.filter((item) => item.id !== id);
+    debounceSave();
+    broadcast();
+    return publicState();
+  });
+
+  ipcMain.handle("lumen:reset-shield", () => {
+    shieldStats.blocked = 0;
+    shieldStats.recent = [];
+    store.shield = { total: 0, recent: [] };
+    debounceSave();
+    broadcast();
+    return publicState();
+  });
+
   ipcMain.handle("lumen:toggle-bookmark", () => {
     const tab = getActiveTab();
     if (!tab || tab.isNewTab) return publicState();
@@ -1293,6 +1641,10 @@ function setupIpc() {
       store.settings.animations = patch.animations;
     }
 
+    if (typeof patch.shield === "boolean") {
+      store.settings.shield = patch.shield;
+    }
+
     if (patch.appearance && typeof patch.appearance === "object") {
       store.settings.appearance = normalizeAppearance({
         ...store.settings.appearance,
@@ -1377,6 +1729,7 @@ if (!gotLock) {
     applyNativeTheme();
     setupIpc();
     setupDownloads();
+    setupShield();
 
     nativeTheme.on("updated", () => {
       applyNativeTheme();

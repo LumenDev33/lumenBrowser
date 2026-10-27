@@ -106,6 +106,10 @@ const ui = {
   layoutDeep: false,
   layoutSaveTimer: null,
   historyQuery: "",
+  historyView: "list",
+  timelineSessions: [],
+  noteSaveTimer: null,
+  quiet: { active: false, endsAt: 0, timer: null, minutes: 25 },
   newtabSignature: "",
   addressTabId: null,
   toastTimer: null,
@@ -379,6 +383,15 @@ function formatTime(timestamp) {
   }).format(new Date(timestamp));
 }
 
+function plural(count, one, few, many) {
+  const value = Math.abs(Number(count) || 0) % 100;
+  const last = value % 10;
+  if (value > 10 && value < 20) return many;
+  if (last > 1 && last < 5) return few;
+  if (last === 1) return one;
+  return many;
+}
+
 function dayKey(timestamp) {
   const date = new Date(timestamp);
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -538,6 +551,50 @@ function createMockApi() {
       { id: "h4", title: "MDN Web Docs", url: "https://developer.mozilla.org", visitedAt: now - 1000 * 60 * 60 * 28, favicon: null }
     ],
     downloads: [],
+    spaces: [
+      {
+        id: "space-demo-1",
+        name: "Дизайн",
+        color: "#a855f7",
+        tabs: [
+          { url: "https://www.figma.com/file/lumen", title: "Lumen — дизайн-система", favicon: null },
+          { url: "https://www.are.na", title: "Are.na — коллекции идей", favicon: null }
+        ],
+        createdAt: now - 1000 * 60 * 60 * 4,
+        updatedAt: now - 1000 * 60 * 60 * 4
+      },
+      {
+        id: "space-demo-2",
+        name: "Чтение",
+        color: "#34d399",
+        tabs: [
+          { url: "https://www.themarginalian.org", title: "The Marginalian", favicon: null },
+          { url: "https://developer.mozilla.org", title: "MDN Web Docs", favicon: null }
+        ],
+        createdAt: now - 1000 * 60 * 60 * 26,
+        updatedAt: now - 1000 * 60 * 60 * 26
+      }
+    ],
+    notes: [
+      {
+        id: "note-demo-1",
+        url: "https://linear.app",
+        title: "Linear — планирование без шума",
+        domain: "linear.app",
+        text: "Посмотреть, как устроены пространства и быстрые команды. Забрать идею с клавиатурной навигацией.",
+        updatedAt: now - 1000 * 60 * 20
+      }
+    ],
+    shield: {
+      enabled: true,
+      sessionBlocked: 12,
+      total: 248,
+      recent: [
+        { host: "google-analytics.com", at: now - 1000 * 60 * 3 },
+        { host: "doubleclick.net", at: now - 1000 * 60 * 8 },
+        { host: "hotjar.com", at: now - 1000 * 60 * 14 }
+      ]
+    },
     settings: {
       name: "",
       searchEngine: "duckduckgo",
@@ -545,6 +602,7 @@ function createMockApi() {
       accent: "gold",
       showBookmarks: true,
       animations: true,
+      shield: true,
       appearance: { ...DEFAULT_APPEARANCE }
     },
     maximized: false,
@@ -649,6 +707,103 @@ function createMockApi() {
     reload: async () => {},
     stop: async () => {},
     reopenClosed: async () => {},
+    openTabs: async (urls) => {
+      (Array.isArray(urls) ? urls : []).slice(0, 12).forEach((url) => {
+        if (demoState.tabs.some((tab) => tab.url === url)) return;
+        demoState.tabs.push({
+          id: `tab-demo-${++sequence}`,
+          url,
+          title: hostOf(url),
+          favicon: null,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          isNewTab: false,
+          error: null
+        });
+      });
+      emit();
+      return demoState;
+    },
+    saveSpace: async (payload) => {
+      const current = demoState.tabs.filter((tab) => !tab.isNewTab).map((tab) => ({
+        url: tab.url,
+        title: tab.title,
+        favicon: tab.favicon
+      }));
+      const id = payload?.id;
+      let space = id ? demoState.spaces.find((item) => item.id === id) : null;
+      if (payload?.useCurrentTabs) {
+        if (!current.length) return demoState;
+        if (space) {
+          space.tabs = current;
+          space.updatedAt = Date.now();
+          if (payload.name) space.name = payload.name;
+        } else {
+          space = {
+            id: `space-demo-${++sequence}`,
+            name: payload?.name || `Пространство ${demoState.spaces.length + 1}`,
+            color: ["#a855f7", "#60a5fa", "#34d399", "#fbbf24", "#fb7185"][demoState.spaces.length % 5],
+            tabs: current,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+          demoState.spaces.unshift(space);
+        }
+      } else if (space && payload?.name) {
+        space.name = payload.name;
+        space.updatedAt = Date.now();
+      }
+      emit();
+      return demoState;
+    },
+    openSpace: async (id) => {
+      const space = demoState.spaces.find((item) => item.id === id);
+      if (space) {
+        await api.openTabs(space.tabs.map((tab) => tab.url));
+      }
+      return demoState;
+    },
+    deleteSpace: async (id) => {
+      demoState.spaces = demoState.spaces.filter((item) => item.id !== id);
+      emit();
+      return demoState;
+    },
+    saveNote: async (payload) => {
+      const url = payload?.url;
+      if (!/^https?:/i.test(url || "")) return demoState;
+      const text = payload?.text || "";
+      let note = demoState.notes.find((item) => item.url === url);
+      if (!text.trim()) {
+        demoState.notes = demoState.notes.filter((item) => item.url !== url);
+      } else if (note) {
+        note.text = text;
+        note.title = payload.title || note.title;
+        note.updatedAt = Date.now();
+      } else {
+        note = {
+          id: `note-demo-${++sequence}`,
+          url,
+          title: payload.title || hostOf(url),
+          domain: hostOf(url),
+          text,
+          updatedAt: Date.now()
+        };
+        demoState.notes.unshift(note);
+      }
+      emit();
+      return demoState;
+    },
+    removeNote: async (id) => {
+      demoState.notes = demoState.notes.filter((item) => item.id !== id);
+      emit();
+      return demoState;
+    },
+    resetShield: async () => {
+      demoState.shield = { enabled: demoState.settings.shield !== false, sessionBlocked: 0, total: 0, recent: [] };
+      emit();
+      return demoState;
+    },
     toggleBookmark: async () => {
       const tab = active();
       if (!tab || tab.isNewTab) return demoState;
@@ -676,6 +831,9 @@ function createMockApi() {
     },
     updateSettings: async (patch) => {
       demoState.settings = { ...demoState.settings, ...patch };
+      if (typeof patch?.shield === "boolean") {
+        demoState.shield.enabled = patch.shield;
+      }
       emit();
       return demoState;
     },
@@ -698,7 +856,9 @@ function createMockApi() {
 function cacheDom() {
   const ids = [
     "app", "tabs", "tab-count", "bookmarks", "bookmarks-section", "add-bookmark",
+    "spaces", "spaces-section", "add-space",
     "new-tab", "address", "omnibox", "security-icon", "bookmark-page", "open-palette",
+    "open-shield", "shield-badge",
     "go-back", "go-forward", "reload", "reload-icon", "win-min", "win-max", "win-close",
     "page-shell", "page-view", "newtab", "newtab-date", "newtab-greeting",
     "start-search", "start-search-input", "quick-grid", "recent-list",
@@ -708,6 +868,7 @@ function cacheDom() {
     "settings-overlay", "settings-body", "designer-overlay", "designer-body",
     "layout-outline", "layout-outline-label", "layout-bar", "layout-target-name",
     "layout-scale", "layout-scale-value", "layout-x", "layout-y",
+    "quiet-pill", "quiet-time",
     "toast", "download-dot", "brand-home", "copy-url", "progress",
     "profile-avatar", "profile-name", "profile-meta"
   ];
@@ -945,6 +1106,8 @@ const LAYOUT_TARGETS = [
   [".brand", "brand", "Логотип"],
   [".brand-version", "brand-version", "Версия"],
   [".new-tab-btn", "new-tab-btn", "Кнопка новой вкладки"],
+  [".spaces-section", "spaces-section", "Пространства"],
+  [".spaces", "spaces", "Список пространств"],
   [".tabs-section", "tabs-section", "Блок вкладок"],
   [".bookmarks-section", "bookmarks-section", "Блок закладок"],
   [".sidebar-foot", "sidebar-foot", "Нижнее меню"],
@@ -1614,9 +1777,11 @@ function renderProfile() {
 function renderAll() {
   if (!state) return;
 
+  renderSpaces();
   renderTabs();
   renderBookmarks();
   renderOmnibox();
+  renderShieldBadge();
   renderPageState();
   renderProgress();
 
@@ -1631,6 +1796,47 @@ function renderAll() {
 
   const layout = currentLayout();
   if (Object.keys(layout).length) applyLayout(layout);
+}
+
+function renderSpaces() {
+  if (!el.spaces) return;
+
+  const spaces = Array.isArray(state.spaces) ? state.spaces.slice(0, 8) : [];
+
+  if (!spaces.length) {
+    el.spaces.innerHTML = `
+      <button class="space-empty" type="button" data-panel="spaces">
+        ${icon("space")}
+        <span>Сохранить вкладки как пространство</span>
+      </button>
+    `;
+    return;
+  }
+
+  el.spaces.innerHTML = spaces
+    .map(
+      (space) => `
+        <button class="space-chip" type="button" data-space-open="${escapeHTML(space.id)}" title="${escapeHTML(space.name)} — ${(space.tabs || []).length} ${plural((space.tabs || []).length, "вкладка", "вкладки", "вкладок")}" style="--space-color:${safeColor(space.color, "#a855f7")}">
+          <span class="space-dot"></span>
+          <span class="space-name">${escapeHTML(space.name)}</span>
+          <span class="space-count">${(space.tabs || []).length}</span>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function renderShieldBadge() {
+  if (!el.shieldBadge) return;
+  const blocked = Number(state.shield?.sessionBlocked) || 0;
+  el.shieldBadge.textContent = blocked > 99 ? "99+" : String(blocked);
+  el.shieldBadge.hidden = blocked <= 0;
+  if (el.openShield) {
+    el.openShield.title = blocked
+      ? `Щит Lumen: ${blocked} запросов остановлено за сессию`
+      : "Щит Lumen";
+    el.openShield.setAttribute("aria-label", el.openShield.title);
+  }
 }
 
 function renderTabs() {
@@ -1892,7 +2098,10 @@ function renderNewtab() {
         <section class="recent-block" aria-labelledby="recent-title">
           <div class="block-head">
             <h2 id="recent-title">Недавнее</h2>
-            <button class="block-link" type="button" data-panel="history">вся история</button>
+            <span class="block-head-actions">
+              <button class="block-link" type="button" data-open-timeline>хроника</button>
+              <button class="block-link" type="button" data-panel="history">вся история</button>
+            </span>
           </div>
           <div class="recent-list" id="recent-list">${recentItems}</div>
         </section>
@@ -2069,9 +2278,31 @@ function renderSettings() {
       </div>
     </div>
 
+    <div class="setting-group">
+      <div class="setting-group-title">Приватность</div>
+      <div class="setting-row">
+        <div class="setting-copy">
+          <h3>Щит Lumen</h3>
+          <p>Локально блокирует известные аналитические и рекламные домены. Счётчик и список — в панели щита.</p>
+        </div>
+        <div class="setting-control">
+          <button class="toggle${settings.shield !== false ? " is-on" : ""}" type="button" data-toggle="shield" role="switch" aria-checked="${settings.shield !== false}" aria-label="Щит Lumen"></button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-copy">
+          <h3>Заметки и пространства</h3>
+          <p>Хранятся только в локальном файле состояния Lumen.</p>
+        </div>
+        <div class="setting-control">
+          <button class="btn btn--ghost" type="button" data-panel="notes">Открыть заметки</button>
+        </div>
+      </div>
+    </div>
+
     <div class="settings-foot">
-      <span>Настройки сохраняются локально на этом устройстве.</span>
-      <b>LUMEN 1.3</b>
+      <span>Lumen 2.0 Beta · настройки сохраняются локально.</span>
+      <b>LUMEN 2.0</b>
     </div>
   `;
 }
@@ -2495,12 +2726,154 @@ function resetDesigner() {
    Drawer: history and downloads
    ========================================================= */
 
+function buildTimeline(history) {
+  const gap = 30 * 60 * 1000;
+  const items = (Array.isArray(history) ? history : [])
+    .filter((item) => item && item.url)
+    .slice()
+    .sort((a, b) => (Number(b.visitedAt) || 0) - (Number(a.visitedAt) || 0));
+
+  const sessions = [];
+
+  items.forEach((item) => {
+    const at = Number(item.visitedAt) || Date.now();
+    const current = sessions[sessions.length - 1];
+
+    if (!current || current.lastAt - at > gap) {
+      sessions.push({ items: [item], lastAt: at });
+    } else {
+      current.items.push(item);
+      current.lastAt = at;
+    }
+  });
+
+  return sessions.map((session) => {
+    const sorted = session.items
+      .slice()
+      .sort((a, b) => (Number(a.visitedAt) || 0) - (Number(b.visitedAt) || 0));
+    return {
+      items: sorted,
+      startAt: Number(sorted[0]?.visitedAt) || Date.now(),
+      endAt: Number(sorted[sorted.length - 1]?.visitedAt) || Date.now()
+    };
+  });
+}
+
+function renderTimeline(history) {
+  const sessions = buildTimeline(history).slice(0, 12);
+  ui.timelineSessions = sessions;
+
+  if (!sessions.length) {
+    return `
+      <div class="drawer-empty">
+        <span class="drawer-empty-icon">${icon("history")}</span>
+        <b>Хроника пока пуста</b>
+        <p>Откройте несколько страниц — Lumen соберёт их в сессии.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="timeline-list">
+      ${sessions
+        .map((session, index) => {
+          const domains = Array.from(
+            new Set(session.items.map((item) => domainOf(item.url)).filter(Boolean))
+          ).slice(0, 3);
+
+          return `
+            <article class="timeline-card">
+              <div class="timeline-card-head">
+                <span class="timeline-marker" aria-hidden="true"></span>
+                <div class="timeline-card-copy">
+                  <b>${escapeHTML(dayLabel(session.startAt))} · ${escapeHTML(formatTime(session.startAt))}–${escapeHTML(formatTime(session.endAt))}</b>
+                  <span>${session.items.length} ${plural(session.items.length, "страница", "страницы", "страниц")}${domains.length ? ` · ${domains.map((domain) => escapeHTML(domain)).join(" · ")}` : ""}</span>
+                </div>
+                <button class="timeline-open" type="button" data-open-session="${index}">Открыть</button>
+              </div>
+              <div class="timeline-pages">
+                ${session.items
+                  .slice(0, 5)
+                  .map(
+                    (item) => `
+                      <button class="timeline-page" type="button" data-history-url="${escapeHTML(item.url)}" title="${escapeHTML(item.title || item.url)}">
+                        ${faviconMarkup(item, "timeline-favicon")}
+                        <span>${escapeHTML(item.title || domainOf(item.url))}</span>
+                        <small>${escapeHTML(formatTime(item.visitedAt))}</small>
+                      </button>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function historyGroupsMarkup(history, query) {
+  const groups = new Map();
+  history.forEach((item) => {
+    const key = dayKey(item.visitedAt);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  if (!groups.size) {
+    return `
+      <div class="drawer-empty">
+        <span class="drawer-empty-icon">${icon("history")}</span>
+        <b>${query ? "Ничего не найдено" : "История пока пуста"}</b>
+        <p>${query ? "Попробуйте другой запрос." : "Страницы, которые вы открываете, будут появляться здесь."}</p>
+      </div>
+    `;
+  }
+
+  return Array.from(groups.entries())
+    .map(([, items]) => {
+      const first = items[0];
+      return `
+        <section class="history-group">
+          <div class="history-day">${escapeHTML(dayLabel(first.visitedAt))}</div>
+          ${items
+            .map(
+              (item) => `
+                <div class="history-item" data-history-url="${escapeHTML(item.url)}" role="button" tabindex="0" title="${escapeHTML(item.title)}">
+                  ${faviconMarkup(item, "history-favicon")}
+                  <span class="history-main">
+                    <span class="history-title">${escapeHTML(item.title || domainOf(item.url))}</span>
+                    <span class="history-url">${escapeHTML(domainOf(item.url))}</span>
+                  </span>
+                  <span class="history-time">${escapeHTML(formatTime(item.visitedAt))}</span>
+                  <button class="history-remove" type="button" data-remove-history="${escapeHTML(item.id)}" aria-label="Удалить из истории" title="Удалить">
+                    ${icon("close")}
+                  </button>
+                </div>
+              `
+            )
+            .join("")}
+        </section>
+      `;
+    })
+    .join("");
+}
+
 function renderDrawer() {
   if (!el.drawerBody || !ui.panel) return;
 
+  if (
+    (ui.panel === "notes" && document.activeElement?.id === "note-editor") ||
+    (ui.panel === "spaces" && document.activeElement?.classList?.contains("space-name-input"))
+  ) {
+    return;
+  }
+
   if (ui.panel === "history") {
-    if (el.drawerTitle) el.drawerTitle.textContent = "История";
-    if (el.drawerKicker) el.drawerKicker.textContent = "архив";
+    const isTimeline = ui.historyView === "timeline";
+    if (el.drawerTitle) el.drawerTitle.textContent = isTimeline ? "Хроника" : "История";
+    if (el.drawerKicker) el.drawerKicker.textContent = isTimeline ? "сессии" : "архив";
     if (el.drawerActions) el.drawerActions.innerHTML = "";
 
     const query = ui.historyQuery.trim().toLowerCase();
@@ -2509,61 +2882,205 @@ function renderDrawer() {
       return `${item.title || ""} ${item.url || ""}`.toLowerCase().includes(query);
     });
 
-    const groups = new Map();
-    history.forEach((item) => {
-      const key = dayKey(item.visitedAt);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(item);
-    });
+    const content = isTimeline ? renderTimeline(history) : historyGroupsMarkup(history, query);
 
-    const list = groups.size
-      ? Array.from(groups.entries())
-          .map(([, items]) => {
-            const first = items[0];
+    el.drawerBody.innerHTML = `
+      <div class="drawer-toolbar drawer-toolbar--history">
+        <div class="drawer-view-switch" role="tablist" aria-label="Вид истории">
+          <button class="drawer-view-btn${isTimeline ? "" : " is-active"}" type="button" data-history-view="list" role="tab" aria-selected="${!isTimeline}">Лента</button>
+          <button class="drawer-view-btn${isTimeline ? " is-active" : ""}" type="button" data-history-view="timeline" role="tab" aria-selected="${isTimeline}">Хроника</button>
+        </div>
+        <label class="drawer-search">
+          ${icon("search")}
+          <input id="history-search" type="text" spellcheck="false" autocomplete="off" placeholder="Найти в истории" value="${escapeHTML(ui.historyQuery)}" aria-label="Поиск по истории">
+        </label>
+        ${isTimeline ? "" : `<button class="drawer-clear" type="button" data-clear-history>${icon("trash")}<span>Очистить</span></button>`}
+      </div>
+      ${content}
+    `;
+
+    hydrateFavicons(el.drawerBody);
+    return;
+  }
+
+  if (ui.panel === "spaces") {
+    if (el.drawerTitle) el.drawerTitle.textContent = "Пространства";
+    if (el.drawerKicker) el.drawerKicker.textContent = "наборы вкладок";
+    if (el.drawerActions) el.drawerActions.innerHTML = "";
+
+    const spaces = Array.isArray(state.spaces) ? state.spaces : [];
+    const openPages = (Array.isArray(state.tabs) ? state.tabs : []).filter((tab) => !tab.isNewTab).length;
+
+    const list = spaces.length
+      ? spaces
+          .map((space) => {
+            const tabs = Array.isArray(space.tabs) ? space.tabs : [];
             return `
-              <section class="history-group">
-                <div class="history-day">${escapeHTML(dayLabel(first.visitedAt))}</div>
-                ${items
-                  .map(
-                    (item) => `
-                      <div class="history-item" data-history-url="${escapeHTML(item.url)}" role="button" tabindex="0" title="${escapeHTML(item.title)}">
-                        ${faviconMarkup(item, "history-favicon")}
-                        <span class="history-main">
-                          <span class="history-title">${escapeHTML(item.title || domainOf(item.url))}</span>
-                          <span class="history-url">${escapeHTML(domainOf(item.url))}</span>
-                        </span>
-                        <span class="history-time">${escapeHTML(formatTime(item.visitedAt))}</span>
-                        <button class="history-remove" type="button" data-remove-history="${escapeHTML(item.id)}" aria-label="Удалить из истории" title="Удалить">
-                          ${icon("close")}
-                        </button>
-                      </div>
-                    `
-                  )
-                  .join("")}
-              </section>
+              <article class="space-card" style="--space-color:${safeColor(space.color, "#a855f7")}">
+                <div class="space-card-head">
+                  <span class="space-dot" aria-hidden="true"></span>
+                  <input class="space-name-input" data-space-name="${escapeHTML(space.id)}" value="${escapeHTML(space.name)}" maxlength="40" aria-label="Название пространства">
+                  <span class="space-card-count">${tabs.length}</span>
+                </div>
+                <div class="space-card-tabs">
+                  ${
+                    tabs.length
+                      ? tabs
+                          .slice(0, 4)
+                          .map((tab) => `<span class="space-card-tab">${escapeHTML(tab.title || hostOf(tab.url))}</span>`)
+                          .join("")
+                      : `<span class="space-card-tab is-empty">Пока пусто</span>`
+                  }
+                </div>
+                <div class="space-card-actions">
+                  <button type="button" data-space-open="${escapeHTML(space.id)}">Открыть</button>
+                  <button type="button" data-space-update="${escapeHTML(space.id)}">Обновить</button>
+                  <button type="button" data-space-delete="${escapeHTML(space.id)}">Удалить</button>
+                </div>
+              </article>
             `;
           })
           .join("")
       : `
         <div class="drawer-empty">
-          <span class="drawer-empty-icon">${icon("history")}</span>
-          <b>${query ? "Ничего не найдено" : "История пока пуста"}</b>
-          <p>${query ? "Попробуйте другой запрос." : "Страницы, которые вы открываете, будут появляться здесь."}</p>
+          <span class="drawer-empty-icon">${icon("space")}</span>
+          <b>Пространств пока нет</b>
+          <p>Откройте нужные вкладки и сохраните их как пространство — Lumen вернёт их одним нажатием.</p>
         </div>
       `;
 
     el.drawerBody.innerHTML = `
-      <div class="drawer-toolbar">
-        <label class="drawer-search">
-          ${icon("search")}
-          <input id="history-search" type="text" spellcheck="false" autocomplete="off" placeholder="Найти в истории" value="${escapeHTML(ui.historyQuery)}" aria-label="Поиск по истории">
-        </label>
-        <button class="drawer-clear" type="button" data-clear-history>${icon("trash")}<span>Очистить</span></button>
-      </div>
-      ${list}
+      <form class="space-create" id="space-create">
+        <input class="text-input" id="space-name" type="text" maxlength="40" spellcheck="false" autocomplete="off" placeholder="Название нового пространства" aria-label="Название нового пространства">
+        <button class="btn btn--primary" type="submit">${icon("plus")}<span>Сохранить текущие</span></button>
+      </form>
+      <p class="space-create-hint">${openPages ? `В окне ${openPages} ${plural(openPages, "страница", "страницы", "страниц")}. В пространство попадут все открытые вкладки.` : "Сначала откройте хотя бы одну страницу."}</p>
+      <div class="space-list">${list}</div>
     `;
+    return;
+  }
 
+  if (ui.panel === "notes") {
+    if (el.drawerTitle) el.drawerTitle.textContent = "Заметки";
+    if (el.drawerKicker) el.drawerKicker.textContent = "локально";
+    if (el.drawerActions) el.drawerActions.innerHTML = "";
+
+    const active = state.activeTab;
+    const canNote = Boolean(active && !active.isNewTab && /^https?:/i.test(active.url || ""));
+    const notes = Array.isArray(state.notes) ? state.notes : [];
+    const current = canNote ? notes.find((note) => note.url === active.url) : null;
+
+    const editor = canNote
+      ? `
+        <section class="note-editor-card">
+          <div class="note-context">
+            ${faviconMarkup(active, "note-context-favicon")}
+            <span>
+              <b>${escapeHTML(active.title || domainOf(active.url))}</b>
+              <small>${escapeHTML(domainOf(active.url))}</small>
+            </span>
+          </div>
+          <textarea id="note-editor" maxlength="20000" spellcheck="true" placeholder="Что важно запомнить об этой странице?">${escapeHTML(current?.text || "")}</textarea>
+          <div class="note-editor-foot">
+            <span>${current ? `Изменено ${escapeHTML(recentDateLabel(current.updatedAt))}` : "Заметка сохраняется локально"}</span>
+            <button type="button" data-save-note-now>Сохранить</button>
+          </div>
+        </section>
+      `
+      : `
+        <div class="note-no-page">
+          ${icon("note")}
+          <span>Откройте страницу, чтобы добавить заметку.</span>
+        </div>
+      `;
+
+    const list = notes.length
+      ? notes
+          .map(
+            (note) => `
+              <article class="note-card${current && current.id === note.id ? " is-current" : ""}">
+                <button class="note-card-main" type="button" data-note-url="${escapeHTML(note.url)}" title="Открыть страницу">
+                  ${faviconMarkup(note, "note-favicon")}
+                  <span class="note-card-copy">
+                    <b>${escapeHTML(note.title || domainOf(note.url))}</b>
+                    <small>${escapeHTML(note.domain || domainOf(note.url))} · ${escapeHTML(recentDateLabel(note.updatedAt))}</small>
+                    <span class="note-card-excerpt">${escapeHTML(String(note.text || "").slice(0, 180))}</span>
+                  </span>
+                </button>
+                <button class="note-card-remove" type="button" data-remove-note="${escapeHTML(note.id)}" aria-label="Удалить заметку" title="Удалить заметку">
+                  ${icon("trash")}
+                </button>
+              </article>
+            `
+          )
+          .join("")
+      : `
+        <div class="drawer-empty">
+          <span class="drawer-empty-icon">${icon("note")}</span>
+          <b>Заметок пока нет</b>
+          <p>Оставьте заметку к странице — она останется только на этом устройстве.</p>
+        </div>
+      `;
+
+    el.drawerBody.innerHTML = `
+      ${editor}
+      <div class="note-list-head">
+        <span>Все заметки</span>
+        <span>${notes.length}</span>
+      </div>
+      <div class="note-list">${list}</div>
+    `;
     hydrateFavicons(el.drawerBody);
+    return;
+  }
+
+  if (ui.panel === "shield") {
+    if (el.drawerTitle) el.drawerTitle.textContent = "Щит Lumen";
+    if (el.drawerKicker) el.drawerKicker.textContent = "приватность";
+    if (el.drawerActions) el.drawerActions.innerHTML = "";
+
+    const shield = state.shield || {
+      enabled: true,
+      sessionBlocked: 0,
+      total: 0,
+      recent: []
+    };
+    const recent = Array.isArray(shield.recent) ? shield.recent : [];
+
+    el.drawerBody.innerHTML = `
+      <section class="shield-hero${shield.enabled ? " is-on" : ""}">
+        <span class="shield-orb">${icon("shield")}</span>
+        <div class="shield-hero-copy">
+          <span class="eyebrow">${shield.enabled ? "защита включена" : "защита выключена"}</span>
+          <h3>${Number(shield.sessionBlocked) || 0} запросов остановлено</h3>
+          <p>Lumen Shield блокирует известные аналитические и рекламные домены. Всё считается локально и никуда не отправляется.</p>
+        </div>
+        <button class="toggle${shield.enabled ? " is-on" : ""}" type="button" data-shield-toggle role="switch" aria-checked="${shield.enabled}" aria-label="Щит Lumen"></button>
+      </section>
+      <div class="shield-stats">
+        <div><span>за сессию</span><b>${Number(shield.sessionBlocked) || 0}</b></div>
+        <div><span>всего</span><b>${Number(shield.total) || 0}</b></div>
+      </div>
+      <div class="shield-section-head">
+        <span>Последние остановленные</span>
+        <button type="button" data-reset-shield>Сбросить</button>
+      </div>
+      ${
+        recent.length
+          ? `<div class="shield-recent">${recent
+              .map(
+                (item) => `
+                  <div class="shield-recent-item">
+                    <span class="shield-dot" aria-hidden="true"></span>
+                    <b>${escapeHTML(item.host)}</b>
+                    <span>${escapeHTML(formatTime(item.at))}</span>
+                  </div>
+                `
+              )
+              .join("")}</div>`
+          : `<div class="shield-empty">${icon("shield")}<span>Пока чисто. Заблокированные запросы появятся здесь.</span></div>`
+      }
+    `;
     return;
   }
 
@@ -2637,6 +3154,99 @@ function renderDrawer() {
 }
 
 /* =========================================================
+   Notes and quiet mode
+   ========================================================= */
+
+function currentNoteTarget() {
+  const active = state?.activeTab;
+  if (!active || active.isNewTab || !/^https?:/i.test(active.url || "")) return null;
+  return { url: active.url, title: active.title || active.url };
+}
+
+function scheduleNoteSave(text) {
+  const target = currentNoteTarget();
+  if (!target) return;
+
+  if (ui.noteSaveTimer) clearTimeout(ui.noteSaveTimer);
+  ui.noteSaveTimer = setTimeout(() => {
+    ui.noteSaveTimer = null;
+    api.saveNote({ ...target, text });
+  }, 450);
+}
+
+function flushNoteSave() {
+  if (!ui.noteSaveTimer) return;
+
+  clearTimeout(ui.noteSaveTimer);
+  ui.noteSaveTimer = null;
+
+  const editor = document.getElementById("note-editor");
+  const target = currentNoteTarget();
+  if (editor && target) {
+    api.saveNote({ ...target, text: editor.value });
+  }
+}
+
+function saveNoteNow() {
+  const editor = document.getElementById("note-editor");
+  const target = currentNoteTarget();
+  if (!editor || !target) {
+    showToast("Сначала откройте страницу");
+    return;
+  }
+
+  if (ui.noteSaveTimer) {
+    clearTimeout(ui.noteSaveTimer);
+    ui.noteSaveTimer = null;
+  }
+
+  api.saveNote({ ...target, text: editor.value });
+  showToast("Заметка сохранена");
+}
+
+function startQuiet(minutes = 25) {
+  closeAllOverlays();
+  ui.quiet.active = true;
+  ui.quiet.minutes = minutes;
+  ui.quiet.endsAt = Date.now() + minutes * 60000;
+  document.body.classList.add("quiet-mode");
+  if (el.quietPill) el.quietPill.hidden = false;
+
+  if (ui.quiet.timer) clearInterval(ui.quiet.timer);
+  updateQuietTime();
+  ui.quiet.timer = setInterval(updateQuietTime, 1000);
+  scheduleBounds();
+  showToast(`Тишина на ${minutes} минут`);
+}
+
+function updateQuietTime() {
+  if (!ui.quiet.active) return;
+
+  const left = Math.max(0, ui.quiet.endsAt - Date.now());
+  const minutes = Math.floor(left / 60000);
+  const seconds = Math.floor((left % 60000) / 1000);
+
+  if (el.quietTime) {
+    el.quietTime.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  if (left <= 0) stopQuiet(true);
+}
+
+function stopQuiet(completed = false) {
+  if (!ui.quiet.active) return;
+
+  ui.quiet.active = false;
+  if (ui.quiet.timer) clearInterval(ui.quiet.timer);
+  ui.quiet.timer = null;
+  document.body.classList.remove("quiet-mode");
+  if (el.quietPill) el.quietPill.hidden = true;
+  scheduleBounds();
+
+  if (completed) showToast("Тишина завершена. Хорошая работа.");
+}
+
+/* =========================================================
    Command palette
    ========================================================= */
 
@@ -2691,6 +3301,44 @@ function renderPalette() {
       sub: "Двигать и масштабировать элементы",
       icon: "move",
       run: () => openLayoutMode()
+    },
+    {
+      id: "spaces",
+      title: "Пространства",
+      sub: "Наборы вкладок для проектов",
+      icon: "space",
+      run: () => openPanel("spaces")
+    },
+    {
+      id: "timeline",
+      title: "Хроника сессий",
+      sub: "Вернуться к целой сессии",
+      icon: "history",
+      run: () => {
+        ui.historyView = "timeline";
+        openPanel("history");
+      }
+    },
+    {
+      id: "notes",
+      title: "Заметки",
+      sub: "Локальные заметки к страницам",
+      icon: "note",
+      run: () => openPanel("notes")
+    },
+    {
+      id: "shield",
+      title: "Щит Lumen",
+      sub: "Приватность и блокировка трекеров",
+      icon: "shield",
+      run: () => openPanel("shield")
+    },
+    {
+      id: "quiet",
+      title: "Тишина · 25 минут",
+      sub: "Скрыть интерфейс и сосредоточиться",
+      icon: "moon",
+      run: () => startQuiet(25)
     },
     {
       id: "bookmark",
@@ -2770,7 +3418,7 @@ function renderPalette() {
     items.push(...matchingBookmarks, ...matchingHistory);
   }
 
-  ui.paletteItems = items.slice(0, 12);
+  ui.paletteItems = items.slice(0, 16);
 
   if (ui.paletteIndex >= ui.paletteItems.length) ui.paletteIndex = 0;
   if (ui.paletteIndex < 0) ui.paletteIndex = 0;
@@ -2832,6 +3480,13 @@ function openPanel(panel) {
       if (search) search.focus();
     });
   }
+
+  if (panel === "spaces") {
+    requestAnimationFrame(() => {
+      const input = el.drawerBody?.querySelector("#space-name");
+      if (input) input.focus();
+    });
+  }
 }
 
 function blurOverlayFocus() {
@@ -2843,6 +3498,7 @@ function blurOverlayFocus() {
 
 function closeOverlay() {
   if (!ui.panel) return;
+  flushNoteSave();
   ui.panel = null;
   if (el.overlay) el.overlay.hidden = true;
   blurOverlayFocus();
@@ -2855,6 +3511,7 @@ function closeAllOverlays() {
   );
 
   if (ui.layoutOpen) closeLayoutMode();
+  flushNoteSave();
 
   ui.panel = null;
   ui.paletteOpen = false;
@@ -3008,7 +3665,40 @@ function bindEvents() {
     if (bookmark) navigateFromUI(bookmark.dataset.bookmarkUrl);
   });
 
+  el.spaces?.addEventListener("click", (event) => {
+    const space = event.target.closest("[data-space-open]");
+    if (space) {
+      closeAllOverlays();
+      api.openSpace(space.dataset.spaceOpen);
+    }
+  });
+
+  el.addSpace?.addEventListener("click", () => openPanel("spaces"));
+  el.openShield?.addEventListener("click", () => openPanel("shield"));
+
   document.addEventListener("click", (event) => {
+    const quietStart = event.target.closest("[data-quiet-start]");
+    if (quietStart) {
+      event.preventDefault();
+      startQuiet(25);
+      return;
+    }
+
+    const quietExit = event.target.closest("[data-quiet-exit]");
+    if (quietExit) {
+      event.preventDefault();
+      stopQuiet(false);
+      return;
+    }
+
+    const timeline = event.target.closest("[data-open-timeline]");
+    if (timeline) {
+      event.preventDefault();
+      ui.historyView = "timeline";
+      openPanel("history");
+      return;
+    }
+
     const panelButton = event.target.closest("[data-panel]");
     if (!panelButton) return;
     event.preventDefault();
@@ -3128,6 +3818,84 @@ function bindEvents() {
       return;
     }
 
+    const viewButton = event.target.closest("[data-history-view]");
+    if (viewButton) {
+      ui.historyView = viewButton.dataset.historyView;
+      renderDrawer();
+      return;
+    }
+
+    const openSession = event.target.closest("[data-open-session]");
+    if (openSession) {
+      const session = ui.timelineSessions[Number(openSession.dataset.openSession)];
+      if (session) {
+        const urls = session.items.map((item) => item.url).slice(0, 10);
+        closeOverlay();
+        api.openTabs(urls).then(() =>
+          showToast(`Открыто ${urls.length} ${plural(urls.length, "вкладка", "вкладки", "вкладок")}`)
+        );
+      }
+      return;
+    }
+
+    const spaceOpen = event.target.closest("[data-space-open]");
+    if (spaceOpen) {
+      closeOverlay();
+      api.openSpace(spaceOpen.dataset.spaceOpen).then(() => showToast("Пространство открыто"));
+      return;
+    }
+
+    const spaceUpdate = event.target.closest("[data-space-update]");
+    if (spaceUpdate) {
+      event.stopPropagation();
+      api.saveSpace({ id: spaceUpdate.dataset.spaceUpdate, useCurrentTabs: true }).then(() => {
+        showToast("Пространство обновлено");
+      });
+      return;
+    }
+
+    const spaceDelete = event.target.closest("[data-space-delete]");
+    if (spaceDelete) {
+      event.stopPropagation();
+      api.deleteSpace(spaceDelete.dataset.spaceDelete);
+      showToast("Пространство удалено");
+      return;
+    }
+
+    const shieldToggle = event.target.closest("[data-shield-toggle]");
+    if (shieldToggle) {
+      const enabled = state?.shield?.enabled !== false;
+      api.updateSettings({ shield: !enabled });
+      showToast(enabled ? "Щит выключен" : "Щит включён");
+      return;
+    }
+
+    if (event.target.closest("[data-reset-shield]")) {
+      api.resetShield();
+      showToast("Статистика щита сброшена");
+      return;
+    }
+
+    const removeNote = event.target.closest("[data-remove-note]");
+    if (removeNote) {
+      event.stopPropagation();
+      api.removeNote(removeNote.dataset.removeNote);
+      showToast("Заметка удалена");
+      return;
+    }
+
+    const noteOpen = event.target.closest("[data-note-url]");
+    if (noteOpen) {
+      closeOverlay();
+      api.navigate(noteOpen.dataset.noteUrl);
+      return;
+    }
+
+    if (event.target.closest("[data-save-note-now]")) {
+      saveNoteNow();
+      return;
+    }
+
     if (event.target.closest("[data-clear-history]")) {
       clearHistoryWithConfirm();
       return;
@@ -3155,6 +3923,11 @@ function bindEvents() {
   });
 
   el.drawerBody?.addEventListener("input", (event) => {
+    if (event.target.id === "note-editor") {
+      scheduleNoteSave(event.target.value);
+      return;
+    }
+
     if (event.target.id !== "history-search") return;
 
     const caret = event.target.selectionStart;
@@ -3167,6 +3940,50 @@ function bindEvents() {
       const position = Math.min(caret, nextInput.value.length);
       nextInput.setSelectionRange(position, position);
     }
+  });
+
+  el.drawerBody?.addEventListener("focusout", (event) => {
+    if (event.target.id !== "note-editor") return;
+    flushNoteSave();
+    setTimeout(() => {
+      if (ui.panel === "notes" && document.activeElement?.id !== "note-editor") {
+        renderDrawer();
+      }
+    }, 120);
+  });
+
+  el.drawerBody?.addEventListener("change", (event) => {
+    const input = event.target.closest("[data-space-name]");
+    if (!input) return;
+
+    const name = input.value.trim();
+    if (!name) {
+      const space = (state.spaces || []).find((item) => item.id === input.dataset.spaceName);
+      input.value = space?.name || "Пространство";
+      return;
+    }
+
+    api.saveSpace({ id: input.dataset.spaceName, name });
+  });
+
+  el.drawerBody?.addEventListener("submit", (event) => {
+    if (!event.target.closest("#space-create")) return;
+    event.preventDefault();
+
+    const input = el.drawerBody.querySelector("#space-name");
+    const name = input?.value.trim() || "";
+    const openPages = (state.tabs || []).filter((tab) => !tab.isNewTab).length;
+
+    if (!openPages) {
+      showToast("Сначала откройте хотя бы одну страницу");
+      return;
+    }
+
+    api.saveSpace({ name, useCurrentTabs: true }).then(() => {
+      showToast("Пространство сохранено");
+      const nextInput = el.drawerBody.querySelector("#space-name");
+      if (nextInput) nextInput.value = "";
+    });
   });
 
   el.drawerBody?.addEventListener("keydown", (event) => {

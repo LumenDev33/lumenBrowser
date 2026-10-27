@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1600, initial-scale=1">
+<title>Lumen Mobile — Concept</title>
+<style>
+  :root {
+    --ink: #f4efe6;
+    --muted: #a9a196;
+    --faint: #6f6962;
+    --line: rgba(255, 255, 255, 0.09);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --bg: #0b0a0d;
+    --panel: #131117;
+    --surface: #19171e;
+    --gold: #f3d37a;
+    --gold-deep: #c79d48;
+    --violet: #b388f4;
+    --blue: #7fb3ff;
+    --mint: #70d7b4;
+    --coral: #f39a8f;
+    --sans: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --mono: "Cascadia Mono", "Consolas", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    width: 1600px;
+    height: 1200px;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    position: relative;
+    background:
+      radial-gradient(900px 560px at 8% 2%, rgba(179, 136, 244, 0.14), transparent 64%),
+      radial-gradient(820px 540px at 96% 16%, rgba(243, 211, 122, 0.10), transparent 62%),
+      radial-gradient(760px 540px at 64% 100%, rgba(127, 179, 255, 0.075), transparent 64%),
+      linear-gradient(150deg, #100d13 0%, #0b0a0d 56%, #09080b 100%);
+  }
+
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.34;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+    mix-blend-mode: soft-light;
+  }
+
+  .board {
+    position: relative;
+    width: 1600px;
+    height: 1200px;
+    padding: 54px 72px 46px;
+  }
+
+  .board::before {
+    content: "LUMEN";
+    position: absolute;
+    left: -18px;
+    bottom: -78px;
+    font-size: 260px;
+    font-weight: 700;
+    letter-spacing: -0.065em;
+    color: rgba(255, 255, 255, 0.024);
+    pointer-events: none;
+  }
+
+  .topbar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .brand-mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid rgba(243, 211, 122, 0.28);
+    border-radius: 13px;
+    background:
+      radial-gradient(120% 120% at 25% 20%, rgba(179, 136, 244, 0.44), transparent 62%),
+      linear-gradient(145deg, rgba(243, 211, 122, 0.13), rgba(179, 136, 244, 0.12));
+    box-shadow: 0 0 28px rgba(179, 136, 244, 0.15);
+  }
+
+  .brand-mark svg { width: 27px; height: 27px; }
+
+  .brand-copy {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .brand-word {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+  }
+
+  .brand-tag {
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .meta b { color: var(--gold); font-weight: 500; }
+
+  .hero {
+    position: relative;
+    z-index: 2;
+    width: 470px;
+    margin-top: 112px;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 32px;
+    height: 1px;
+    background: var(--gold);
+    opacity: 0.72;
+  }
+
+  h1 {
+    margin: 26px 0 24px;
+    font-size: 83px;
+    font-weight: 300;
+    line-height: 0.94;
+    letter-spacing: -0.065em;
+  }
+
+  h1 em {
+    font-family: var(--serif);
+    font-weight: 400;
+    color: var(--gold);
+  }
+
+  .lede {
+    margin: 0;
+    max-width: 410px;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.65;
+    letter-spacing: -0.01em;
+  }
+
+  .features {
+    display: grid;
+    gap: 0;
+    width: 430px;
+    margin-top: 44px;
+    border-top: 1px solid var(--line);
+  }
+
+  .feature {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 16px;
+    padding: 17px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .feature-index {
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 10px;
+    line-height: 1.7;
+  }
+
+  .feature b {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .feature span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .side-note {
+    position: absolute;
+    left: 76px;
+    bottom: 58px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .side-note::before {
+    content: "";
+    width: 44px;
+    height: 1px;
+    background: var(--line-strong);
+  }
+
+  .phones {
+    position: absolute;
+    top: 176px;
+    right: 72px;
+    z-index: 3;
+    display: flex;
+    align-items: flex-start;
+    gap: 22px;
+  }
+
+  .phone-wrap {
+    position: relative;
+    width: 292px;
+  }
+
+  .phone-wrap:nth-child(2) { margin-top: 56px; }
+  .phone-wrap:nth-child(3) { margin-top: 18px; }
+
+  .phone {
+    position: relative;
+    width: 292px;
+    height: 612px;
+    padding: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 48px;
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 18%),
+      linear-gradient(160deg, #28252d 0%, #111014 52%, #1a171d 100%);
+    box-shadow:
+      0 42px 90px rgba(0, 0, 0, 0.52),
+      0 0 0 1px rgba(0, 0, 0, 0.55),
+      0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  }
+
+  .phone::before {
+    content: "";
+    position: absolute;
+    left: -3px;
+    top: 118px;
+    width: 3px;
+    height: 58px;
+    border-radius: 2px 0 0 2px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .phone::after {
+    content: "";
+    position: absolute;
+    right: -3px;
+    top: 148px;
+    width: 3px;
+    height: 84px;
+    border-radius: 0 2px 2px 0;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 39px;
+    background: #0d0c10;
+  }
+
+  .island {
+    position: absolute;
+    z-index: 8;
+    top: 10px;
+    left: 50%;
+    width: 79px;
+    height: 21px;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 99px;
+    background: #050506;
+  }
+
+  .status {
+    position: relative;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 22px 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.02em;
+  }
+
+  .status-icons {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-icons i {
+    display: block;
+    width: 11px;
+    height: 7px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    opacity: 0.8;
+  }
+
+  .status-icons i:nth-child(2) { width: 8px; }
+  .status-icons i:nth-child(3) { width: 14px; border-radius: 1px; }
+
+  .phone-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 18px;
+    padding: 0 5px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .phone-label b { color: var(--muted); font-weight: 500; }
+
+  /* ---- screen: new tab ---- */
+  .screen-newtab {
+    background:
+      radial-gradient(110% 64% at 22% 4%, rgba(179, 136, 244, 0.19), transparent 62%),
+      radial-gradient(90% 56% at 92% 24%, rgba(243, 211, 122, 0.12), transparent 68%),
+      linear-gradient(180deg, #121016 0%, #0c0b0e 100%);
+  }
+
+  .newtab-orb {
+    position: absolute;
+    top: -62px;
+    right: -58px;
+    width: 220px;
+    height: 220px;
+    border: 1px solid rgba(243, 211, 122, 0.16);
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 34%, rgba(243, 211, 122, 0.14), transparent 58%);
+    opacity: 0.85;
+  }
+
+  .newtab-orb::after {
+    content: "";
+    position: absolute;
+    inset: 30px;
+    border: 1px solid rgba(179, 136, 244, 0.13);
+    border-radius: 50%;
+  }
+
+  .mobile-head {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 26px 22px 0;
+  }
+
+  .mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .mobile-brand svg { width: 20px; height: 20px; }
+
+  .mobile-avatar {
+    display: grid;
+    width: 27px;
+    height: 27px;
+    place-items: center;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    color: var(--gold);
+    font-size: 11px;
+    background: rgba(243, 211, 122, 0.08);
+  }
+
+  .mobile-kicker {
+    padding: 42px 22px 0;
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .mobile-greeting {
+    padding: 12px 22px 0;
+    font-size: 37px;
+    font-weight: 300;
+    line-height: 1.02;
+    letter-spacing: -0.06em;
+  }
+
+  .mobile-greeting em {
+    display: block;
+    color: var(--gold);
+    font-family: var(--serif);
+    font-weight: 400;
+  }
+
+  .mobile-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 24px 22px 0;
+    padding: 13px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .mobile-search svg { width: 15px; height: 15px; color: var(--gold); }
+
+  .mobile-search span { flex: 1; }
+  .mobile-search b { color: var(--ink); font-weight: 500; }
+
+  .mobile-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 30px 22px 12px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .mobile-section b { color: var(--muted); font-weight: 400; }
+
+  .space-pills {
+    display: flex;
+    gap: 7px;
+    padding: 0 22px;
+    overflow: hidden;
+  }
+
+  .space-pill {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    color: var(--muted);
+    font-size: 9px;
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  .space-pill i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--violet);
+    box-shadow: 0 0 9px currentColor;
+  }
+
+  .space-pill:nth-child(2) i { background: var(--blue); }
+  .space-pill:nth-child(3) i { background: var(--mint); }
+
+  .continue-card {
+    position: relative;
+    margin: 17px 22px 0;
+    padding: 16px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background:
+      radial-gradient(120% 100% at 100% 0%, rgba(179, 136, 244, 0.12), transparent 60%),
+      rgba(255, 255, 255, 0.032);
+  }
+
+  .continue-card::after {
+    content: "W";
+    position: absolute;
+    right: 16px;
+    bottom: -18px;
+    color: rgba(255, 255, 255, 0.035);
+    font-family: var(--serif);
+    font-size: 90px;
+    line-height: 1;
+  }
+
+  .continue-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .continue-favicon {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border-radius: 7px;
+    background: #f2f0e9;
+    color: #111;
+    font-family: var(--serif);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .continue-title {
+    position: relative;
+    z-index: 1;
+    margin-top: 18px;
+    max-width: 195px;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  .continue-meta {
+    position: relative;
+    z-index: 1;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  .mobile-nav {
+    position: absolute;
+    right: 20px;
+    bottom: 18px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 10px 8px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(16, 14, 19, 0.82);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-nav span {
+    display: grid;
+    width: 30px;
+    height: 24px;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--faint);
+  }
+
+  .mobile-nav span.active {
+    color: var(--gold);
+    background: rgba(243, 211, 122, 0.11);
+  }
+
+  .mobile-nav svg { width: 14px; height: 14px; }
+
+  /* ---- screen: spaces ---- */
+  .screen-spaces {
+    background:
+      radial-gradient(100% 56% at 18% 0%, rgba(112, 215, 180, 0.11), transparent 62%),
+      linear-gradient(180deg, #111116, #0b0b0e);
+  }
+
+  .spaces-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 28px 22px 0;
+  }
+
+  .spaces-kicker {
+    color: var(--mint);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .spaces-title {
+    margin-top: 8px;
+    font-size: 30px;
+    font-weight: 300;
+    letter-spacing: -0.055em;
+  }
+
+  .round-add {
+    display: grid;
+    width: 33px;
+    height: 33px;
+    place-items: center;
+    border: 1px solid rgba(112, 215, 180, 0.26);
+    border-radius: 50%;
+    color: var(--mint);
+    background: rgba(112, 215, 180, 0.07);
+    font-size: 17px;
+    font-weight: 300;
+  }
+
+  .spaces-intro {
+    margin: 15px 22px 0;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .space-list {
+    display: grid;
+    gap: 10px;
+    padding: 22px 18px 0;
+  }
+
+  .space-card {
+    position: relative;
+    padding: 16px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 19px;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .space-card::after {
+    content: "";
+    position: absolute;
+    top: -44px;
+    right: -36px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(179, 136, 244, 0.16), transparent 66%);
+  }
+
+  .space-card:nth-child(2)::after {
+    background: radial-gradient(circle, rgba(112, 215, 180, 0.14), transparent 66%);
+  }
+
+  .space-card:nth-child(3)::after {
+    background: radial-gradient(circle, rgba(243, 211, 122, 0.12), transparent 66%);
+  }
+
+  .space-card-top {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .space-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--violet);
+    box-shadow: 0 0 12px rgba(179, 136, 244, 0.7);
+  }
+
+  .space-card:nth-child(2) .space-dot { background: var(--mint); box-shadow: 0 0 12px rgba(112, 215, 180, 0.6); }
+  .space-card:nth-child(3) .space-dot { background: var(--gold); box-shadow: 0 0 12px rgba(243, 211, 122, 0.55); }
+
+  .space-card-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .space-card-count {
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 9px;
+  }
+
+  .space-tabs {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 5px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+
+  .space-tab {
+    flex: 0 0 auto;
+    max-width: 92px;
+    overflow: hidden;
+    padding: 4px 7px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 7px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .space-open {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .space-open span {
+    display: inline-block;
+    width: 14px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.7;
+  }
+
+  .spaces-footer {
+    position: absolute;
+    right: 22px;
+    bottom: 21px;
+    left: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .spaces-footer b { color: var(--muted); font-weight: 400; }
+
+  /* ---- screen: notes / reading ---- */
+  .screen-reading {
+    background:
+      radial-gradient(120% 56% at 80% 0%, rgba(243, 211, 122, 0.1), transparent 64%),
+      linear-gradient(180deg, #131116, #0c0b0f);
+  }
+
+  .reading-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 26px 22px 0;
+  }
+
+  .reading-brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .reading-brand svg { width: 18px; height: 18px; }
+
+  .reading-badge {
+    padding: 6px 9px;
+    border: 1px solid rgba(243, 211, 122, 0.22);
+    border-radius: 99px;
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(243, 211, 122, 0.06);
+  }
+
+  .reading-kicker {
+    margin: 32px 22px 0;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .reading-title {
+    margin: 12px 22px 0;
+    font-size: 27px;
+    font-weight: 300;
+    line-height: 1.1;
+    letter-spacing: -0.055em;
+  }
+
+  .reading-title em {
+    color: var(--gold);
+    font-family: var(--serif);
+    font-weight: 400;
+  }
+
+  .reading-rule {
+    margin: 19px 22px 0;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .reading-copy {
+    margin: 17px 22px 0;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.72;
+  }
+
+  .reading-copy p { margin: 0 0 12px; }
+
+  .reading-copy p:first-child::first-letter {
+    float: left;
+    margin: 3px 6px 0 0;
+    color: var(--gold);
+    font-family: var(--serif);
+    font-size: 35px;
+    line-height: 0.8;
+  }
+
+  .note-float {
+    position: absolute;
+    right: 18px;
+    bottom: 42px;
+    left: 18px;
+    z-index: 4;
+    padding: 15px;
+    border: 1px solid rgba(179, 136, 244, 0.28);
+    border-radius: 20px;
+    background:
+      linear-gradient(135deg, rgba(179, 136, 244, 0.12), rgba(243, 211, 122, 0.05)),
+      rgba(20, 17, 24, 0.94);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px);
+  }
+
+  .note-float-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--violet);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .note-float-head b { color: var(--faint); font-weight: 400; }
+
+  .note-float p {
+    margin: 11px 0 0;
+    color: var(--ink);
+    font-size: 11px;
+    line-height: 1.52;
+  }
+
+  .note-float small {
+    display: block;
+    margin-top: 11px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 8px;
+  }
+
+  .reading-nav {
+    position: absolute;
+    right: 20px;
+    bottom: 14px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 9px 8px;
+    border: 1px solid var(--line);
+    border-radius: 17px;
+    background: rgba(15, 13, 18, 0.88);
+    backdrop-filter: blur(14px);
+  }
+
+  .reading-nav span {
+    display: grid;
+    width: 28px;
+    height: 22px;
+    place-items: center;
+    border-radius: 7px;
+    color: var(--faint);
+  }
+
+  .reading-nav span.active { color: var(--violet); background: rgba(179, 136, 244, 0.11); }
+  .reading-nav svg { width: 13px; height: 13px; }
+
+  .annotation {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 170px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 9px;
+    line-height: 1.55;
+    letter-spacing: 0.02em;
+  }
+
+  .annotation::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 18px;
+    height: 1px;
+    margin-top: 7px;
+    background: var(--line-strong);
+  }
+
+  .annotation b { color: var(--muted); font-weight: 500; }
+
+  .annotation-1 { top: 355px; left: 490px; }
+  .annotation-2 { top: 570px; left: 820px; }
+  .annotation-3 { top: 290px; left: 1130px; }
+
+  .footer-line {
+    position: absolute;
+    right: 72px;
+    bottom: 58px;
+    left: 72px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .footer-line b { color: var(--gold); font-weight: 400; }
+
+  .footer-line::before {
+    content: "";
+    position: absolute;
+    top: -18px;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: var(--line);
+  }
+</style>
+</head>
+<body>
+  <div class="board">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <circle cx="16" cy="16" r="10.1" stroke="currentColor" stroke-opacity="0.18" stroke-width="0.8"/>
+            <g stroke-width="2.1" stroke-linecap="round">
+              <path d="M17 5.3a10.8 10.8 0 0 1 9.7 9.7" stroke="#d8b4fe"/>
+              <path d="M26.7 19a10.8 10.8 0 0 1-9.7 9.7" stroke="#a855f7"/>
+              <path d="M15 26.7a10.8 10.8 0 0 1-9.7-9.7" stroke="#f3d37a"/>
+              <path d="M5.3 13a10.8 10.8 0 0 1 9.7-9.7" stroke="#8b7bff"/>
+            </g>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-word">lumen</span>
+          <span class="brand-tag">mobile concept</span>
+        </span>
+      </div>
+      <div class="meta">
+        <span>2.0 beta</span>
+        <span><b>01</b> / 03</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow">концепт мобильной версии</div>
+      <h1>Тишина<br><em>в кармане.</em></h1>
+      <p class="lede">Lumen на маленьком экране сохраняет главное: спокойный ритм, пространства вместо десятков вкладок и место для собственных мыслей.</p>
+
+      <div class="features">
+        <div class="feature">
+          <span class="feature-index">01</span>
+          <div><b>Одна рука. Ноль шума.</b><span>Крупные зоны касания, мягкие переходы и никаких лишних панелей.</span></div>
+        </div>
+        <div class="feature">
+          <span class="feature-index">02</span>
+          <div><b>Пространства вместо хаоса</b><span>Проект, чтение и дорога — каждый набор вкладок живёт отдельно.</span></div>
+        </div>
+        <div class="feature">
+          <span class="feature-index">03</span>
+          <div><b>Заметка рядом со страницей</b><span>Мысль остаётся привязанной к точному месту в интернете.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="phones">
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="screen screen-newtab">
+            <div class="island"></div>
+            <div class="status"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
+            <div class="newtab-orb"></div>
+            <div class="mobile-head">
+              <span class="mobile-brand">
+                <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                  <circle cx="16" cy="16" r="10.1" stroke="currentColor" stroke-opacity="0.2" stroke-width="0.8"/>
+                  <g stroke-width="2.1" stroke-linecap="round">
+                    <path d="M17 5.3a10.8 10.8 0 0 1 9.7 9.7" stroke="#d8b4fe"/>
+                    <path d="M26.7 19a10.8 10.8 0 0 1-9.7 9.7" stroke="#a855f7"/>
+                    <path d="M15 26.7a10.8 10.8 0 0 1-9.7-9.7" stroke="#f3d37a"/>
+                    <path d="M5.3 13a10.8 10.8 0 0 1 9.7-9.7" stroke="#8b7bff"/>
+                  </g>
+                </svg>
+                lumen
+              </span>
+              <span class="mobile-avatar">л</span>
+            </div>
+            <div class="mobile-kicker">тихое место для интернета</div>
+            <div class="mobile-greeting">Доброе<em>утро.</em></div>
+            <div class="mobile-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+              <span>Поиск или адрес</span>
+              <b>→</b>
+            </div>
+            <div class="mobile-section"><span>Пространства</span><b>все</b></div>
+            <div class="space-pills">
+              <span class="space-pill"><i></i>Чтение</span>
+              <span class="space-pill"><i></i>Проект</span>
+              <span class="space-pill"><i></i>Дорога</span>
+            </div>
+            <div class="mobile-section"><span>Продолжить</span><b>2 мин</b></div>
+            <div class="continue-card">
+              <div class="continue-top"><span class="continue-favicon">W</span><span>wikipedia.org</span></div>
+              <div class="continue-title">Дизайн как способ замедлить внимание</div>
+              <div class="continue-meta">Статья · 11:27</div>
+            </div>
+            <div class="mobile-nav">
+              <span class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m4 10 8-6 8 6v9H4z"/><path d="M9 19v-5h6v5"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9h16"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 4.5h9L19 9v10.5H6z"/><path d="M14 4.5V9h5"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l2.5 2"/></svg></span>
+            </div>
+          </div>
+        </div>
+        <div class="phone-label"><b>01</b><span>new tab</span></div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="screen screen-spaces">
+            <div class="island"></div>
+            <div class="status"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
+            <div class="spaces-head">
+              <div>
+                <div class="spaces-kicker">наборы вкладок</div>
+                <div class="spaces-title">Пространства</div>
+              </div>
+              <span class="round-add">+</span>
+            </div>
+            <p class="spaces-intro">Один жест — и Lumen возвращает целый контекст: статью, документацию и пару вкладок, к которым вы вернётесь.</p>
+            <div class="space-list">
+              <article class="space-card">
+                <div class="space-card-top"><span class="space-dot"></span><span class="space-card-name">Чтение</span><span class="space-card-count">4</span></div>
+                <div class="space-tabs"><span class="space-tab">Wikipedia</span><span class="space-tab">The Marginalian</span><span class="space-tab">Are.na</span></div>
+                <div class="space-open"><span></span>Открыть</div>
+              </article>
+              <article class="space-card">
+                <div class="space-card-top"><span class="space-dot"></span><span class="space-card-name">Проект Lumen</span><span class="space-card-count">7</span></div>
+                <div class="space-tabs"><span class="space-tab">Figma</span><span class="space-tab">GitHub</span><span class="space-tab">Linear</span></div>
+                <div class="space-open"><span></span>Открыть</div>
+              </article>
+              <article class="space-card">
+                <div class="space-card-top"><span class="space-dot"></span><span class="space-card-name">Дорога</span><span class="space-card-count">3</span></div>
+                <div class="space-tabs"><span class="space-tab">Карты</span><span class="space-tab">Погода</span><span class="space-tab">Заметки</span></div>
+                <div class="space-open"><span></span>Открыть</div>
+              </article>
+            </div>
+            <div class="spaces-footer"><span>локально</span><b>3 пространства</b></div>
+          </div>
+        </div>
+        <div class="phone-label"><b>02</b><span>spaces</span></div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="screen screen-reading">
+            <div class="island"></div>
+            <div class="status"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
+            <div class="reading-top">
+              <span class="reading-brand">
+                <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                  <circle cx="16" cy="16" r="10.1" stroke="currentColor" stroke-opacity="0.2" stroke-width="0.8"/>
+                  <g stroke-width="2.1" stroke-linecap="round">
+                    <path d="M17 5.3a10.8 10.8 0 0 1 9.7 9.7" stroke="#d8b4fe"/>
+                    <path d="M26.7 19a10.8 10.8 0 0 1-9.7 9.7" stroke="#a855f7"/>
+                    <path d="M15 26.7a10.8 10.8 0 0 1-9.7-9.7" stroke="#f3d37a"/>
+                    <path d="M5.3 13a10.8 10.8 0 0 1 9.7-9.7" stroke="#8b7bff"/>
+                  </g>
+                </svg>
+                lumen
+              </span>
+              <span class="reading-badge">тишина · 18:24</span>
+            </div>
+            <div class="reading-kicker">сегодня · 11:27</div>
+            <div class="reading-title">Дизайн как способ <em>замедлить</em> внимание</div>
+            <div class="reading-rule"></div>
+            <div class="reading-copy">
+              <p>Хороший интерфейс не требует внимания. Он освобождает его для того, что действительно важно.</p>
+              <p>Мы читаем, думаем и возвращаемся к одной и той же мысли. Иногда достаточно просто убрать лишнее.</p>
+              <p>Тишина — это не отсутствие звука. Это пространство, в котором слышно себя.</p>
+            </div>
+            <div class="note-float">
+              <div class="note-float-head"><span>заметка</span><b>wikipedia.org</b></div>
+              <p>«Тишина — это не отсутствие звука. Это пространство, в котором слышно себя».</p>
+              <small>сохранено локально · сейчас</small>
+            </div>
+            <div class="reading-nav">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m4 10 8-6 8 6v9H4z"/><path d="M9 19v-5h6v5"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9h16"/></svg></span>
+              <span class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 4.5h9L19 9v10.5H6z"/><path d="M14 4.5V9h5"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l2.5 2"/></svg></span>
+            </div>
+          </div>
+        </div>
+        <div class="phone-label"><b>03</b><span>notes &amp; quiet</span></div>
+      </div>
+    </div>
+
+    <div class="side-note">сделано для тихого интернета</div>
+    <div class="footer-line">
+      <span>Lumen Mobile · Concept art · 2026</span>
+      <span><b>Не является рабочим приложением</b> · только направление дизайна</span>
+    </div>
+  </div>
+</body>
+</html>
